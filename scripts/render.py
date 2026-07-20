@@ -7,6 +7,7 @@ from pathlib import Path
 import tyro
 from pydantic import BaseModel
 
+BLACK = Path("__black__")
 IMAGE_SUFFIXES = {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
 
 
@@ -48,7 +49,6 @@ def run(
     fps: int = 10,
     still_duration: float = 30.0,
     start_black_duration: float = 8.0,
-    default_still_fade: float = 4.0,
     title_probability: float = 0.05,
     title_duration: float = 8.0,
     title_fade: float = 4.0,
@@ -65,7 +65,6 @@ def run(
         fps=fps,
         still_duration=still_duration,
         start_black_duration=start_black_duration,
-        default_still_fade=default_still_fade,
         title_probability=title_probability,
         title_duration=title_duration,
         title_fade=title_fade,
@@ -85,7 +84,6 @@ class RenderConfig(BaseModel):
     fps: int = 10
     still_duration: float = 30.0
     start_black_duration: float = 8.0
-    default_still_fade: float = 4.0
     title_probability: float = 0.05
     title_duration: float = 8.0
     title_fade: float = 4.0
@@ -111,8 +109,6 @@ def validate_config(config: RenderConfig) -> None:
         sys.exit("width, height, and fps must be positive")
     if config.still_duration <= 0:
         sys.exit("still_duration must be positive")
-    if config.default_still_fade <= 0:
-        sys.exit("default_still_fade must be positive")
     if not 0 <= config.title_probability <= 1:
         sys.exit("title_probability must be between 0 and 1")
     if config.title_duration <= 0 or config.title_fade < 0:
@@ -152,7 +148,12 @@ def probe_duration(path: Path) -> float:
 
 def build_plan(config: RenderConfig, media: list[Media]) -> RenderPlan:
     rng = random.Random(config.seed)
-    scenes = [Scene(media=black_media(), duration=config.start_black_duration)]
+    scenes = [
+        Scene(
+            media=black_media(config.start_black_duration),
+            duration=config.start_black_duration,
+        )
+    ]
     transitions: list[Transition] = []
     title_events: list[TitleEvent] = []
 
@@ -164,24 +165,26 @@ def build_plan(config: RenderConfig, media: list[Media]) -> RenderPlan:
         transitions.append(
             Transition(duration=_clamp_fade(config.title_fade, scenes[-2], scenes[-1]))
         )
-        scenes.append(Scene(media=black_media(), duration=config.start_black_duration))
+        stretch_scenes_for_transitions(scenes, transitions)
+        scenes.append(
+            Scene(
+                media=black_media(config.start_black_duration),
+                duration=config.start_black_duration,
+            )
+        )
         transitions.append(
             Transition(duration=_clamp_fade(config.title_fade, scenes[-2], scenes[-1]))
         )
+        stretch_scenes_for_transitions(scenes, transitions)
 
     current = scenes[-1]
     while timeline_duration(scenes, transitions) < config.duration:
         next_media = choose_media(rng, media, current.media)
         next_scene = Scene(media=next_media, duration=next_media.duration)
-        transition = Transition(
-            duration=fade_duration(
-                current,
-                next_scene,
-                default_still_fade=config.default_still_fade,
-            )
-        )
+        transition = Transition(duration=fade_duration(current, next_scene))
         scenes.append(next_scene)
         transitions.append(transition)
+        stretch_scenes_for_transitions(scenes, transitions)
         if config.title_card is not None and rng.random() < config.title_probability:
             title_events.append(
                 TitleEvent(
@@ -203,18 +206,24 @@ def choose_media(rng: random.Random, media: list[Media], current: Media) -> Medi
     return rng.choice(choices or media)
 
 
-def fade_duration(
-    current: Scene, next_scene: Scene, *, default_still_fade: float
-) -> float:
-    if current.media.is_still and next_scene.media.is_still:
-        fade = default_still_fade
-    elif current.media.is_still:
-        fade = next_scene.duration / 2
-    elif next_scene.media.is_still:
-        fade = current.duration / 2
-    else:
-        fade = min(current.duration, next_scene.duration) / 2
-    return _clamp_fade(fade, current, next_scene)
+def fade_duration(current: Scene, next_scene: Scene) -> float:
+    return max(natural_duration(current), natural_duration(next_scene)) / 2
+
+
+def natural_duration(scene: Scene) -> float:
+    return scene.media.duration
+
+
+def stretch_scenes_for_transitions(
+    scenes: list[Scene], transitions: list[Transition]
+) -> None:
+    for index, scene in enumerate(scenes):
+        overlap_duration = 0.0
+        if index > 0:
+            overlap_duration += transitions[index - 1].duration
+        if index < len(transitions):
+            overlap_duration += transitions[index].duration
+        scene.duration = max(scene.duration, natural_duration(scene), overlap_duration)
 
 
 def _clamp_fade(fade: float, current: Scene, next_scene: Scene) -> float:
@@ -226,8 +235,8 @@ def timeline_duration(scenes: list[Scene], transitions: list[Transition]) -> flo
     return sum(s.duration for s in scenes) - sum(t.duration for t in transitions)
 
 
-def black_media() -> Media:
-    return Media(path=Path("__black__"), duration=float("inf"), is_still=True)
+def black_media(duration: float) -> Media:
+    return Media(path=BLACK, duration=duration, is_still=True)
 
 
 def ffmpeg_command(config: RenderConfig, plan: RenderPlan) -> list[str]:
@@ -267,6 +276,8 @@ def ffmpeg_command(config: RenderConfig, plan: RenderPlan) -> list[str]:
             "yuv420p",
             "-movflags",
             "+faststart",
+            "-t",
+            f"{config.duration:.6f}",
             config.output.as_posix(),
         ]
     )
@@ -275,7 +286,7 @@ def ffmpeg_command(config: RenderConfig, plan: RenderPlan) -> list[str]:
 
 def input_args(scene: Scene) -> list[str]:
     duration = f"{scene.duration:.6f}"
-    if scene.media.path == Path("__black__"):
+    if scene.media.path == BLACK:
         return [
             "-f",
             "lavfi",

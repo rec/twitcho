@@ -12,36 +12,37 @@ from scripts.render import (
     fade_duration,
     ffmpeg_command,
     filter_graph,
+    stretch_scenes_for_transitions,
     timeline_duration,
 )
 
 
-def test_fade_duration_uses_half_shorter_video() -> None:
+def test_fade_duration_uses_half_longer_video() -> None:
     first = Scene(media=Media(path=Path("a.mp4"), duration=20), duration=20)
     second = Scene(media=Media(path=Path("b.mp4"), duration=10), duration=10)
 
-    assert fade_duration(first, second, default_still_fade=4) == 5
+    assert fade_duration(first, second) == 10
 
 
-def test_fade_duration_uses_half_video_for_video_and_still() -> None:
+def test_fade_duration_uses_half_longer_media_for_video_and_still() -> None:
     video = Scene(media=Media(path=Path("a.mp4"), duration=20), duration=20)
     still = Scene(
         media=Media(path=Path("b.png"), duration=30, is_still=True), duration=30
     )
 
-    assert fade_duration(video, still, default_still_fade=4) == 10
-    assert fade_duration(still, video, default_still_fade=4) == 10
+    assert fade_duration(video, still) == 15
+    assert fade_duration(still, video) == 15
 
 
-def test_fade_duration_uses_fixed_time_for_two_stills() -> None:
+def test_fade_duration_uses_half_longer_still_for_two_stills() -> None:
     first = Scene(
         media=Media(path=Path("a.png"), duration=30, is_still=True), duration=30
     )
     second = Scene(
-        media=Media(path=Path("b.png"), duration=30, is_still=True), duration=30
+        media=Media(path=Path("b.png"), duration=8, is_still=True), duration=8
     )
 
-    assert fade_duration(first, second, default_still_fade=4) == 4
+    assert fade_duration(first, second) == 15
 
 
 def test_build_plan_is_seeded_and_avoids_immediate_repeats() -> None:
@@ -61,14 +62,32 @@ def test_build_plan_is_seeded_and_avoids_immediate_repeats() -> None:
 
     for first, second in zip(paths, paths[1:], strict=False):
         assert first != second
+    for index, transition in enumerate(plan.transitions):
+        assert plan.scenes[index].duration >= transition.duration
+        assert plan.scenes[index + 1].duration >= transition.duration
     assert timeline_duration(plan.scenes, plan.transitions) >= 40
+
+
+def test_stretch_scenes_loops_short_media_for_adjacent_fades() -> None:
+    scenes = [
+        Scene(media=Media(path=Path("a.mp4"), duration=30), duration=30),
+        Scene(media=Media(path=Path("b.mp4"), duration=8), duration=8),
+        Scene(media=Media(path=Path("c.mp4"), duration=20), duration=20),
+    ]
+    transitions = [Transition(duration=15), Transition(duration=10)]
+
+    stretch_scenes_for_transitions(scenes, transitions)
+
+    assert scenes[0].duration == 30
+    assert scenes[1].duration == 25
+    assert scenes[2].duration == 20
 
 
 def test_build_plan_can_insert_title_events_without_changing_base_sequence() -> None:
     config = RenderConfig(
         inputs=[Path("a.mp4")],
         output=Path("out.mp4"),
-        duration=20,
+        duration=40,
         seed=1,
         title_card=Path("title.png"),
         title_probability=1,
@@ -120,6 +139,7 @@ def test_ffmpeg_command_uses_inputs_xfade_and_title_overlay() -> None:
     assert "-loop" in command
     assert "xfade=transition=fade" in graph
     assert "overlay=(W-w)/2:(H-h)/2:eof_action=pass" in graph
+    assert command[command.index("-t", command.index("-movflags")) + 1] == "20.000000"
     assert command[-1] == "out.mp4"
 
 
