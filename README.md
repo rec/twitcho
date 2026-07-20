@@ -13,14 +13,7 @@ Create a JSON config file:
 {
   "device_name": "X18",
   "channel": 17,
-  "segments": {
-    "idle": {
-      "animation": "idle.mp4",
-      "body": {"begin": 0, "end": 30},
-      "loop": {"begin": 2, "end": 28},
-      "loop_count": 3
-    }
-  },
+  "video": "visual-bed.mp4",
   "twitch_key": "live_..."
 }
 ```
