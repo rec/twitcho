@@ -1,0 +1,31 @@
+[project]
+name = "twitcho"
+version = "0.1.0"
+description = "Stream a stereo audio device pair with low-cost animation video to Twitch."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pydantic>=2",
+    "sounddevice",
+    "tyro",
+]
+
+[project.scripts]
+twitcho = "twitcho.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I"]
