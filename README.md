@@ -28,3 +28,22 @@ twitcho --config config.json
 example, `17` streams channels 17 and 18.
 
 `twitcho` requires `ffmpeg` to be installed.
+
+## Rendering a visual bed
+
+Use `scripts/render.py` to turn looped videos and still images into one prepared
+video for Twitcho:
+
+```bash
+scripts/render.py \
+  --inputs a-looped.mp4 b-looped.mp4 still.png \
+  --output visual-bed.mp4 \
+  --duration 3600 \
+  --seed 1234 \
+  --title-card title.png
+```
+
+The renderer starts from black, optionally fades through the title card, and then
+chooses inputs at random. It crossfades slowly between scenes and occasionally
+fades the title card over the current scene without changing the underlying media
+sequence.
