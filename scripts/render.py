@@ -64,7 +64,8 @@ def run(
     work_fps: int = 30,
     still_duration: float = 30.0,
     start_black_duration: float = 8.0,
-    title_probability: float = 0.05,
+    title_interval: float = 180.0,
+    title_jitter: float = 30.0,
     title_duration: float = 8.0,
     title_fade: float = 4.0,
 ) -> None:
@@ -81,7 +82,8 @@ def run(
         work_fps=work_fps,
         still_duration=still_duration,
         start_black_duration=start_black_duration,
-        title_probability=title_probability,
+        title_interval=title_interval,
+        title_jitter=title_jitter,
         title_duration=title_duration,
         title_fade=title_fade,
     )
@@ -101,7 +103,8 @@ class RenderConfig(BaseModel):
     work_fps: int = 30
     still_duration: float = 30.0
     start_black_duration: float = 8.0
-    title_probability: float = 0.05
+    title_interval: float = 180.0
+    title_jitter: float = 30.0
     title_duration: float = 8.0
     title_fade: float = 4.0
 
@@ -125,7 +128,7 @@ def render(config: RenderConfig) -> None:
 def render_prepared(config: RenderConfig) -> None:
     media = [probe_media(path, config.still_duration) for path in config.inputs]
     plan = build_plan(config, media)
-    print_render_schedule(plan)
+    print_render_schedule(config, plan)
     command = ffmpeg_command(config, plan)
     run_silent(command)
 
@@ -147,8 +150,10 @@ def validate_config(config: RenderConfig) -> None:
         sys.exit("width, height, fps, work_scale, and work_fps must be positive")
     if config.still_duration <= 0:
         sys.exit("still_duration must be positive")
-    if not 0 <= config.title_probability <= 1:
-        sys.exit("title_probability must be between 0 and 1")
+    if config.title_interval <= 0 or config.title_jitter < 0:
+        sys.exit(
+            "title_interval must be positive and title_jitter must not be negative"
+        )
     if config.title_duration <= 0 or config.title_fade < 0:
         sys.exit("title_duration must be positive and title_fade must not be negative")
 
@@ -355,6 +360,7 @@ def build_plan(config: RenderConfig, media: list[Media]) -> RenderPlan:
         )
         stretch_scenes_for_transitions(scenes, transitions)
 
+    title_overlay_start = timeline_duration(scenes, transitions)
     current = scenes[-1]
     while timeline_duration(scenes, transitions) < config.duration:
         next_media = choose_media(rng, media, current.media)
@@ -363,20 +369,26 @@ def build_plan(config: RenderConfig, media: list[Media]) -> RenderPlan:
         scenes.append(next_scene)
         transitions.append(transition)
         stretch_scenes_for_transitions(scenes, transitions)
-        if config.title_card is not None and rng.random() < config.title_probability:
-            title_events.append(
-                TitleEvent(
-                    start=max(
-                        0.0,
-                        timeline_duration(scenes, transitions)
-                        - next_scene.duration / 2,
-                    ),
-                    duration=config.title_duration,
-                )
-            )
         current = next_scene
 
+    if config.title_card is not None:
+        title_events = title_schedule(config, rng, earliest_start=title_overlay_start)
+
     return RenderPlan(scenes=scenes, transitions=transitions, title_events=title_events)
+
+
+def title_schedule(
+    config: RenderConfig, rng: random.Random, *, earliest_start: float
+) -> list[TitleEvent]:
+    events: list[TitleEvent] = []
+    nominal = config.title_interval
+    while nominal < config.duration:
+        jitter = rng.uniform(-config.title_jitter, config.title_jitter)
+        start = max(earliest_start, nominal + jitter)
+        if start < config.duration:
+            events.append(TitleEvent(start=start, duration=config.title_duration))
+        nominal += config.title_interval
+    return events
 
 
 def choose_media(rng: random.Random, media: list[Media], current: Media) -> Media:
@@ -416,10 +428,13 @@ def timeline_duration(scenes: list[Scene], transitions: list[Transition]) -> flo
     return sum(s.duration for s in scenes) - sum(t.duration for t in transitions)
 
 
-def print_render_schedule(plan: RenderPlan) -> None:
+def print_render_schedule(config: RenderConfig, plan: RenderPlan) -> None:
     for start, scene in scene_start_times(plan):
         if scene.media.path != BLACK:
             print(f"{format_time(start)} {scene.media.path.name}")
+    if config.title_card is not None:
+        for event in plan.title_events:
+            print(f"{format_time(event.start)} {config.title_card.name}")
 
 
 def scene_start_times(plan: RenderPlan) -> list[tuple[float, Scene]]:

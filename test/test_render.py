@@ -1,3 +1,4 @@
+import random
 import subprocess as sp
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from scripts.render import (
     scene_start_times,
     stretch_scenes_for_transitions,
     timeline_duration,
+    title_schedule,
 )
 
 
@@ -99,20 +101,21 @@ def test_stretch_scenes_loops_short_media_for_adjacent_fades() -> None:
     assert scenes[2].duration == 20
 
 
-def test_build_plan_can_insert_title_events_without_changing_base_sequence() -> None:
+def test_build_plan_inserts_title_events_by_interval() -> None:
     config = RenderConfig(
         inputs=[Path("a.mp4")],
         output=Path("out.mp4"),
         duration=40,
         seed=1,
         title_card=Path("title.png"),
-        title_probability=1,
+        title_interval=10,
+        title_jitter=0,
     )
     media = [Media(path=Path("a.mp4"), duration=10)]
 
     plan = build_plan(config, media)
 
-    assert plan.title_events
+    assert [event.start for event in plan.title_events] == [16.0, 20.0, 30.0]
     assert [scene.media.path for scene in plan.scenes[:3]] == [
         Path("__black__"),
         Path("title.png"),
@@ -144,7 +147,24 @@ def test_scene_start_times_use_fade_start_offsets() -> None:
     ]
 
 
-def test_print_render_schedule_prints_non_black_entries(
+def test_title_schedule_applies_jitter_after_intro() -> None:
+    config = RenderConfig(
+        inputs=[Path("a.mp4")],
+        output=Path("out.mp4"),
+        duration=80,
+        seed=1,
+        title_card=Path("title.png"),
+        title_interval=30,
+        title_jitter=5,
+    )
+    rng = random.Random(1)
+
+    events = title_schedule(config, rng, earliest_start=16)
+
+    assert [round(event.start, 3) for event in events] == [26.344, 63.474]
+
+
+def test_print_render_schedule_prints_non_black_entries_and_titles(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     plan = RenderPlan(
@@ -157,14 +177,21 @@ def test_print_render_schedule_prints_non_black_entries(
             Scene(media=Media(path=Path("b.mp4"), duration=12), duration=12),
         ],
         transitions=[Transition(duration=4), Transition(duration=5)],
-        title_events=[],
+        title_events=[TitleEvent(start=11, duration=8)],
     )
 
-    print_render_schedule(plan)
+    config = RenderConfig(
+        inputs=[Path("a.mp4")],
+        output=Path("out.mp4"),
+        title_card=Path("show-title.png"),
+    )
+
+    print_render_schedule(config, plan)
 
     assert capsys.readouterr().out.splitlines() == [
         "0:04.000 a.mp4",
         "0:09.000 b.mp4",
+        "0:11.000 show-title.png",
     ]
 
 
@@ -179,7 +206,6 @@ def test_ffmpeg_command_uses_inputs_xfade_and_title_overlay() -> None:
         duration=20,
         seed=1,
         title_card=Path("title.png"),
-        title_probability=1,
     )
     plan = RenderPlan(
         scenes=[
@@ -326,7 +352,8 @@ def visual_bed_config(fixtures: Path, output: Path) -> RenderConfig:
         start_black_duration=1,
         title_duration=1,
         title_fade=0.5,
-        title_probability=0,
+        title_interval=999,
+        title_jitter=0,
     )
 
 
