@@ -144,6 +144,9 @@ def test_ffmpeg_command_uses_inputs_xfade_and_title_overlay() -> None:
     assert "title.png" in command
     assert "-stream_loop" in command
     assert "-loop" in command
+    assert "scale=1280:720" in graph
+    assert "fps=30" in graph
+    assert "scale=640:360,fps=24,format=yuv420p[out]" in graph
     assert "xfade=transition=fade" in graph
     assert "overlay=(W-w)/2:(H-h)/2:eof_action=pass" in graph
     assert command[command.index("-t", command.index("-movflags")) + 1] == "20.000000"
@@ -161,9 +164,9 @@ def test_filter_graph_maps_final_label() -> None:
 
     graph, output = filter_graph(config, plan)
 
+    assert "scale=1280:720" in graph
     assert "scale=640:360" in graph
-    assert output.startswith("[")
-    assert output.endswith("]")
+    assert output == "[out]"
 
 
 def test_probe_media_uses_still_duration_for_images(
@@ -203,6 +206,8 @@ def test_render_uses_temporary_png_for_markdown_title_card(
         configs.append(config)
         assert config.title_card.suffix == ".png"
         assert config.title_card.exists()
+        with Image.open(config.title_card) as image:
+            assert image.size == (1280, 720)
 
     monkeypatch.setattr(render, "render_prepared", render_prepared)
 

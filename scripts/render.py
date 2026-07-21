@@ -58,7 +58,9 @@ def run(
     title_card: Path | None = None,
     width: int = 640,
     height: int = 360,
-    fps: int = 10,
+    fps: int = 24,
+    work_scale: int = 2,
+    work_fps: int = 30,
     still_duration: float = 30.0,
     start_black_duration: float = 8.0,
     title_probability: float = 0.05,
@@ -74,6 +76,8 @@ def run(
         width=width,
         height=height,
         fps=fps,
+        work_scale=work_scale,
+        work_fps=work_fps,
         still_duration=still_duration,
         start_black_duration=start_black_duration,
         title_probability=title_probability,
@@ -91,7 +95,9 @@ class RenderConfig(BaseModel):
     title_card: Path | None = None
     width: int = 640
     height: int = 360
-    fps: int = 10
+    fps: int = 24
+    work_scale: int = 2
+    work_fps: int = 30
     still_duration: float = 30.0
     start_black_duration: float = 8.0
     title_probability: float = 0.05
@@ -107,8 +113,8 @@ def render(config: RenderConfig) -> None:
             render_markdown_title_card(
                 config.title_card,
                 title_card,
-                width=config.width,
-                height=config.height,
+                width=work_width(config),
+                height=work_height(config),
             )
             render_prepared(config.model_copy(update={"title_card": title_card}))
     else:
@@ -129,8 +135,14 @@ def validate_config(config: RenderConfig) -> None:
         sys.exit(f"{config.title_card} does not exist")
     if config.duration <= 0:
         sys.exit("duration must be positive")
-    if config.width <= 0 or config.height <= 0 or config.fps <= 0:
-        sys.exit("width, height, and fps must be positive")
+    if (
+        config.width <= 0
+        or config.height <= 0
+        or config.fps <= 0
+        or config.work_scale <= 0
+        or config.work_fps <= 0
+    ):
+        sys.exit("width, height, fps, work_scale, and work_fps must be positive")
     if config.still_duration <= 0:
         sys.exit("still_duration must be positive")
     if not 0 <= config.title_probability <= 1:
@@ -403,6 +415,14 @@ def black_media(duration: float) -> Media:
     return Media(path=BLACK, duration=duration, is_still=True)
 
 
+def work_width(config: RenderConfig) -> int:
+    return config.width * config.work_scale
+
+
+def work_height(config: RenderConfig) -> int:
+    return config.height * config.work_scale
+
+
 def ffmpeg_command(config: RenderConfig, plan: RenderPlan) -> list[str]:
     command = ["ffmpeg", "-hide_banner", "-y"]
 
@@ -489,15 +509,21 @@ def filter_graph(config: RenderConfig, plan: RenderPlan) -> tuple[str, str]:
         )
         current_label = next_label
 
-    return ";".join(filters), f"[{current_label}]"
+    filters.append(
+        f"[{current_label}]"
+        f"scale={config.width}:{config.height},"
+        f"fps={config.fps},format=yuv420p[out]"
+    )
+    return ";".join(filters), "[out]"
 
 
 def normalize_filter(index: int, scene: Scene, config: RenderConfig) -> str:
     return (
         f"[{index}:v]"
-        f"scale={config.width}:{config.height}:force_original_aspect_ratio=decrease,"
-        f"pad={config.width}:{config.height}:(ow-iw)/2:(oh-ih)/2,"
-        f"setsar=1,fps={config.fps},format=yuv420p,"
+        f"scale={work_width(config)}:{work_height(config)}:"
+        "force_original_aspect_ratio=decrease,"
+        f"pad={work_width(config)}:{work_height(config)}:(ow-iw)/2:(oh-ih)/2,"
+        f"setsar=1,fps={config.work_fps},format=yuv420p,"
         f"trim=duration={scene.duration:.6f},setpts=PTS-STARTPTS[v{index}]"
     )
 
@@ -508,8 +534,10 @@ def title_filter(
     fade_out_start = max(0.0, event.duration - config.title_fade)
     return (
         f"[{input_index}:v]"
-        f"scale={config.width}:{config.height}:force_original_aspect_ratio=decrease,"
-        f"pad={config.width}:{config.height}:(ow-iw)/2:(oh-ih)/2,"
+        f"scale={work_width(config)}:{work_height(config)}:"
+        "force_original_aspect_ratio=decrease,"
+        f"pad={work_width(config)}:{work_height(config)}:(ow-iw)/2:(oh-ih)/2,"
+        f"fps={config.work_fps},"
         "format=rgba,"
         f"fade=t=in:st=0:d={config.title_fade:.6f}:alpha=1,"
         f"fade=t=out:st={fade_out_start:.6f}:d={config.title_fade:.6f}:alpha=1,"
