@@ -17,10 +17,13 @@ def main() -> None:
     args = parser.parse_args()
 
     for video in args.videos:
-        test_loop(video)
+        if not ignored(video):
+            test_loop(video)
 
 
 def test_loop(video: Path) -> None:
+    if ignored(video):
+        return
     if not video.exists():
         sys.exit(f"{video} does not exist")
     if loop_videos.looped_path(video).exists():
@@ -30,8 +33,9 @@ def test_loop(video: Path) -> None:
         preview = Path(directory) / loop_videos.looped_path(video).name
         write_loop(video, preview)
         while True:
+            print(f"{video} [r=replay, l=loop, return=skip]")
             play_preview(preview)
-            answer = input(f"{video} [r=replay, l=loop, return=skip] ").strip().lower()
+            answer = input("> ").strip().lower()
             if answer == "r":
                 continue
             if answer == "l":
@@ -42,6 +46,10 @@ def test_loop(video: Path) -> None:
             print("Please enter r, l, or return.", file=sys.stderr)
 
 
+def ignored(video: Path) -> bool:
+    return "looped" in video.name.lower()
+
+
 def write_loop(video: Path, output: Path) -> None:
     frame_count = loop_videos.count_frames(video)
     if frame_count < 3:
@@ -50,10 +58,11 @@ def write_loop(video: Path, output: Path) -> None:
 
 
 def play_preview(video: Path) -> None:
-    run_silent(preview_command(video))
+    run_silent(preview_command(video, duration=duration(video)))
 
 
-def preview_command(video: Path) -> list[str]:
+def preview_command(video: Path, *, duration: float) -> list[str]:
+    start = max(0.0, duration - 2.0)
     return [
         "ffplay",
         "-hide_banner",
@@ -62,10 +71,29 @@ def preview_command(video: Path) -> list[str]:
         "-autoexit",
         "-loop",
         "0",
+        "-ss",
+        f"{start:.3f}",
         "-t",
-        "10",
+        "4",
         video.as_posix(),
     ]
+
+
+def duration(video: Path) -> float:
+    result = run_silent(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=nokey=1:noprint_wrappers=1",
+            video.as_posix(),
+        ],
+        text=True,
+    )
+    return float(result.stdout.strip())
 
 
 def accept_loop(video: Path, preview: Path) -> None:

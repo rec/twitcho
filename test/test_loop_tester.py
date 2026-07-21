@@ -1,15 +1,40 @@
 from pathlib import Path
 
+import pytest
+
 from scripts import loop_tester
 
 
 def test_preview_command_uses_ffplay_loop_option() -> None:
-    command = loop_tester.preview_command(Path("movie-looped.mp4"))
+    command = loop_tester.preview_command(Path("movie-looped.mp4"), duration=12.25)
 
     assert "-loop" in command
     assert "0" == command[command.index("-loop") + 1]
     assert "-stream_loop" not in command
+    assert command[command.index("-ss") + 1] == "10.250"
+    assert command[command.index("-t") + 1] == "4"
     assert command[-1] == "movie-looped.mp4"
+
+
+def test_preview_command_starts_at_zero_for_short_videos() -> None:
+    command = loop_tester.preview_command(Path("movie-looped.mp4"), duration=1.5)
+
+    assert command[command.index("-ss") + 1] == "0.000"
+
+
+def test_test_loop_ignores_looped_files(monkeypatch, tmp_path: Path) -> None:
+    video = tmp_path / "movie-looped.mp4"
+    video.write_text("looped")
+    calls: list[str] = []
+
+    def write_loop(video: Path, preview: Path) -> None:
+        calls.append("write")
+
+    monkeypatch.setattr(loop_tester, "write_loop", write_loop)
+
+    loop_tester.test_loop(video)
+
+    assert calls == []
 
 
 def test_accept_loop_moves_preview_and_original(tmp_path: Path) -> None:
@@ -26,7 +51,11 @@ def test_accept_loop_moves_preview_and_original(tmp_path: Path) -> None:
     assert not preview.exists()
 
 
-def test_test_loop_skips_on_empty_answer(monkeypatch, tmp_path: Path) -> None:
+def test_test_loop_prints_controls_before_preview(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
     video = tmp_path / "movie.mp4"
     video.write_text("original")
     calls: list[str] = []
@@ -43,6 +72,7 @@ def test_test_loop_skips_on_empty_answer(monkeypatch, tmp_path: Path) -> None:
 
     loop_tester.test_loop(video)
 
+    assert "r=replay, l=loop, return=skip" in capsys.readouterr().out
     assert calls == ["play"]
     assert video.read_text() == "original"
     assert not (tmp_path / "movie-looped.mp4").exists()
