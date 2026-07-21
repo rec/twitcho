@@ -21,14 +21,11 @@ def loop_video(video: Path) -> Path:
     if not video.exists():
         sys.exit(f"{video} does not exist")
 
-    output = looped_path(video)
-    if output.exists():
-        sys.exit(f"{output} already exists")
-
     frame_count = count_frames(video)
     if frame_count < 3:
         sys.exit(f"{video} has fewer than 3 frames")
 
+    output = looped_path(video)
     run_silent(ffmpeg_command(video, output, frame_count))
     return output
 
@@ -69,7 +66,7 @@ def ffmpeg_command(video: Path, output: Path, frame_count: int) -> list[str]:
     return [
         "ffmpeg",
         "-hide_banner",
-        "-n",
+        "-y",
         "-i",
         video.as_posix(),
         "-filter_complex",

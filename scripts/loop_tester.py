@@ -164,8 +164,6 @@ def duration(video: Path) -> float:
 
 def accept_loop(video: Path, preview: Path) -> None:
     output = looped_output(video)
-    if output.exists():
-        sys.exit(f"{output} already exists")
     output.parent.mkdir(exist_ok=True)
     originals = video.parent / "originals"
     originals.mkdir(exist_ok=True)

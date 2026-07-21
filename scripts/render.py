@@ -64,7 +64,6 @@ def run(
     title_probability: float = 0.05,
     title_duration: float = 8.0,
     title_fade: float = 4.0,
-    overwrite: bool = False,
 ) -> None:
     config = RenderConfig(
         inputs=inputs,
@@ -80,7 +79,6 @@ def run(
         title_probability=title_probability,
         title_duration=title_duration,
         title_fade=title_fade,
-        overwrite=overwrite,
     )
     render(config)
 
@@ -99,7 +97,6 @@ class RenderConfig(BaseModel):
     title_probability: float = 0.05
     title_duration: float = 8.0
     title_fade: float = 4.0
-    overwrite: bool = False
 
 
 def render(config: RenderConfig) -> None:
@@ -130,8 +127,6 @@ def validate_config(config: RenderConfig) -> None:
         sys.exit("at least one input is required")
     if config.title_card is not None and not config.title_card.exists():
         sys.exit(f"{config.title_card} does not exist")
-    if config.output.exists() and not config.overwrite:
-        sys.exit(f"{config.output} already exists")
     if config.duration <= 0:
         sys.exit("duration must be positive")
     if config.width <= 0 or config.height <= 0 or config.fps <= 0:
@@ -409,11 +404,7 @@ def black_media(duration: float) -> Media:
 
 
 def ffmpeg_command(config: RenderConfig, plan: RenderPlan) -> list[str]:
-    command = ["ffmpeg", "-hide_banner"]
-    if config.overwrite:
-        command.append("-y")
-    else:
-        command.append("-n")
+    command = ["ffmpeg", "-hide_banner", "-y"]
 
     for scene in plan.scenes:
         command.extend(input_args(scene))

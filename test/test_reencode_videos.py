@@ -14,6 +14,7 @@ def test_reencode_command_uses_mezzanine_settings() -> None:
     assert command == [
         "ffmpeg",
         "-hide_banner",
+        "-y",
         "-i",
         "source.mov",
         "-vf",
@@ -99,13 +100,3 @@ def test_target_bitrate_is_capped(
     )
 
     assert bitrate == 1200
-
-
-def test_reencode_video_rejects_existing_output(tmp_path: Path) -> None:
-    source = tmp_path / "source.mov"
-    output = tmp_path / "output.mp4"
-    source.touch()
-    output.touch()
-
-    with pytest.raises(SystemExit, match="already exists"):
-        reencode_videos.reencode_video(source, output)

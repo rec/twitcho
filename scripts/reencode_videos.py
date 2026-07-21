@@ -66,9 +66,6 @@ def reencode_video(
     max_bitrate_kbps: int = DEFAULT_MAX_BITRATE_KBPS,
     source_ratio: float = DEFAULT_SOURCE_RATIO,
 ) -> None:
-    if output.exists():
-        sys.exit(f"{output} already exists")
-
     bitrate_kbps = target_bitrate_kbps(
         video, max_bitrate_kbps=max_bitrate_kbps, source_ratio=source_ratio
     )
@@ -80,6 +77,7 @@ def reencode_command(video: Path, output: Path, *, bitrate_kbps: int) -> list[st
     return [
         "ffmpeg",
         "-hide_banner",
+        "-y",
         "-i",
         video.as_posix(),
         "-vf",

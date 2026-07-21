@@ -137,6 +137,8 @@ def test_ffmpeg_command_uses_inputs_xfade_and_title_overlay() -> None:
     command = ffmpeg_command(config, plan)
     graph = command[command.index("-filter_complex") + 1]
 
+    assert "-y" in command
+    assert "-n" not in command
     assert "a.mp4" in command
     assert "b.png" in command
     assert "title.png" in command
@@ -257,7 +259,6 @@ def visual_bed_config(fixtures: Path, output: Path) -> RenderConfig:
         title_duration=1,
         title_fade=0.5,
         title_probability=0,
-        overwrite=True,
     )
 
 

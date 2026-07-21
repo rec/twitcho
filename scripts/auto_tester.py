@@ -106,8 +106,6 @@ def looped_output(video: Path) -> Path:
 
 
 def write_loop(video: Path, output: Path) -> None:
-    if output.exists():
-        sys.exit(f"{output} already exists")
     output.parent.mkdir(exist_ok=True)
     print(f"Counting frames in {video}...")
     frame_count = loop_videos.count_frames(video)
