@@ -102,7 +102,12 @@ def test_test_loop_prints_controls_before_preview(
         calls.append("play")
 
     monkeypatch.setattr(loop_tester, "write_loop", write_loop)
-    monkeypatch.setattr(loop_tester, "write_playback_preview", write_loop)
+
+    def write_playback_preview(source: Path, playback: Path) -> None:
+        calls.append(source.name)
+        playback.touch()
+
+    monkeypatch.setattr(loop_tester, "write_playback_preview", write_playback_preview)
     monkeypatch.setattr(loop_tester, "play_preview", play_preview)
     monkeypatch.setattr("builtins.input", lambda prompt: "")
 
@@ -113,7 +118,7 @@ def test_test_loop_prints_controls_before_preview(
     assert "Preparing playback preview" in output
     assert "Playing preview" in output
     assert "r=replay, l=loop, m=mark as looping, return=skip" in output
-    assert calls == ["play"]
+    assert calls == ["movie.mp4", "play"]
     assert video.read_text() == "original"
     assert not (tmp_path / "loops").exists()
 

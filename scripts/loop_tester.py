@@ -40,7 +40,7 @@ def test_loop(video: Path) -> None:
         print(f"Converting {video} into a temporary loop preview...")
         write_loop(video, preview)
         print(f"Preparing playback preview for {video}...")
-        write_playback_preview(preview, playback)
+        write_playback_preview(video, playback)
         while True:
             print(f"{video} [r=replay, l=loop, m=mark as looping, return=skip]")
             print(f"Playing preview for {video}...")
