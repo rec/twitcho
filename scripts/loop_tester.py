@@ -50,21 +50,22 @@ def write_loop(video: Path, output: Path) -> None:
 
 
 def play_preview(video: Path) -> None:
-    sp.run(
-        [
-            "ffplay",
-            "-hide_banner",
-            "-loglevel",
-            "warning",
-            "-autoexit",
-            "-stream_loop",
-            "-1",
-            "-t",
-            "10",
-            video.as_posix(),
-        ],
-        check=True,
-    )
+    sp.run(preview_command(video), check=True)
+
+
+def preview_command(video: Path) -> list[str]:
+    return [
+        "ffplay",
+        "-hide_banner",
+        "-loglevel",
+        "warning",
+        "-autoexit",
+        "-loop",
+        "0",
+        "-t",
+        "10",
+        video.as_posix(),
+    ]
 
 
 def accept_loop(video: Path, preview: Path) -> None:

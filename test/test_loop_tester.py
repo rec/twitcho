@@ -3,6 +3,15 @@ from pathlib import Path
 from scripts import loop_tester
 
 
+def test_preview_command_uses_ffplay_loop_option() -> None:
+    command = loop_tester.preview_command(Path("movie-looped.mp4"))
+
+    assert "-loop" in command
+    assert "0" == command[command.index("-loop") + 1]
+    assert "-stream_loop" not in command
+    assert command[-1] == "movie-looped.mp4"
+
+
 def test_accept_loop_moves_preview_and_original(tmp_path: Path) -> None:
     video = tmp_path / "movie.mp4"
     preview = tmp_path / "preview.mp4"
