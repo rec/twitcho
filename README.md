@@ -70,6 +70,17 @@ the name, are moved into a `loops/` subdirectory. Accepted files are written as
 `loops/name-looped.mp4`, and their original files are moved into an `originals/`
 subdirectory next to the source file.
 
+Use `scripts/auto_tester.py` to automatically convert videos that are clearly
+not loops:
+
+```bash
+scripts/auto_tester.py videos/*.mp4
+```
+
+The automatic tester compares the first and near-final frames. If they are
+clearly different, it writes `loops/name-looped.mp4` and moves the original into
+`originals/`. Files that might already be loops are left in place.
+
 Use `scripts/render.py` to turn looped videos and still images into one prepared
 video for Twitcho:
 
