@@ -16,8 +16,12 @@ class Twitcho(BaseModel):
     video_bitrate: str = "150k"
     video_resolution: str = "640x360"
     video_frame_rate: int = 10
+    control_enabled: bool = True
+    control_host: str = "127.0.0.1"
+    control_port: int = 17_351
+    control_token: str | None = None
 
-    @field_validator("channel", "sample_rate", "video_frame_rate")
+    @field_validator("channel", "sample_rate", "video_frame_rate", "control_port")
     @classmethod
     def validate_positive(cls, value: int) -> int:
         if value <= 0:

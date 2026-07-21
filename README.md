@@ -29,6 +29,31 @@ example, `17` streams channels 17 and 18.
 
 `twitcho` requires `ffmpeg` to be installed.
 
+## Show-control connection
+
+By default, `twitcho` listens on `127.0.0.1:17351` for a local JSON-lines
+control connection. Each message is one JSON object followed by a newline.
+
+Start with:
+
+```json
+{"type": "hello", "version": 1, "client": "show-control"}
+```
+
+Then send commands:
+
+```json
+{"type": "command", "id": "1", "command": "status"}
+{"type": "command", "id": "2", "command": "mute"}
+{"type": "command", "id": "3", "command": "unmute"}
+{"type": "command", "id": "4", "command": "stop"}
+{"type": "command", "id": "5", "command": "ping"}
+```
+
+The control host and port can be changed with `control_host` and
+`control_port` in the JSON config. Set `control_enabled` to `false` to disable
+the control server.
+
 ## Rendering a visual bed
 
 Use `scripts/render.py` to turn looped videos and still images into one prepared
