@@ -125,6 +125,7 @@ def render(config: RenderConfig) -> None:
 def render_prepared(config: RenderConfig) -> None:
     media = [probe_media(path, config.still_duration) for path in config.inputs]
     plan = build_plan(config, media)
+    print_render_schedule(plan)
     command = ffmpeg_command(config, plan)
     run_silent(command)
 
@@ -413,6 +414,30 @@ def _clamp_fade(fade: float, current: Scene, next_scene: Scene) -> float:
 
 def timeline_duration(scenes: list[Scene], transitions: list[Transition]) -> float:
     return sum(s.duration for s in scenes) - sum(t.duration for t in transitions)
+
+
+def print_render_schedule(plan: RenderPlan) -> None:
+    for start, scene in scene_start_times(plan):
+        if scene.media.path != BLACK:
+            print(f"{format_time(start)} {scene.media.path.name}")
+
+
+def scene_start_times(plan: RenderPlan) -> list[tuple[float, Scene]]:
+    starts = [(0.0, plan.scenes[0])]
+    elapsed = plan.scenes[0].duration
+    for index, scene in enumerate(plan.scenes[1:], start=1):
+        transition = plan.transitions[index - 1]
+        start = max(0.0, elapsed - transition.duration)
+        starts.append((start, scene))
+        elapsed += scene.duration - transition.duration
+    return starts
+
+
+def format_time(seconds: float) -> str:
+    milliseconds = int(round(seconds * 1000))
+    minutes, milliseconds = divmod(milliseconds, 60_000)
+    seconds, milliseconds = divmod(milliseconds, 1000)
+    return f"{minutes}:{seconds:02}.{milliseconds:03}"
 
 
 def black_media(duration: float) -> Media:

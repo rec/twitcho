@@ -2,6 +2,7 @@ import subprocess as sp
 from pathlib import Path
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from scripts import render
@@ -16,7 +17,10 @@ from scripts.render import (
     fade_duration,
     ffmpeg_command,
     filter_graph,
+    format_time,
+    print_render_schedule,
     render_markdown_title_card,
+    scene_start_times,
     stretch_scenes_for_transitions,
     timeline_duration,
 )
@@ -114,6 +118,58 @@ def test_build_plan_can_insert_title_events_without_changing_base_sequence() -> 
         Path("title.png"),
         Path("__black__"),
     ]
+
+
+def test_scene_start_times_use_fade_start_offsets() -> None:
+    plan = RenderPlan(
+        scenes=[
+            Scene(
+                media=Media(path=Path("__black__"), duration=8, is_still=True),
+                duration=8,
+            ),
+            Scene(media=Media(path=Path("a.mp4"), duration=10), duration=10),
+            Scene(media=Media(path=Path("b.mp4"), duration=12), duration=12),
+        ],
+        transitions=[Transition(duration=4), Transition(duration=5)],
+        title_events=[],
+    )
+
+    entries = [
+        (start, scene.media.path.name) for start, scene in scene_start_times(plan)
+    ]
+    assert entries == [
+        (0.0, "__black__"),
+        (4, "a.mp4"),
+        (9, "b.mp4"),
+    ]
+
+
+def test_print_render_schedule_prints_non_black_entries(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan = RenderPlan(
+        scenes=[
+            Scene(
+                media=Media(path=Path("__black__"), duration=8, is_still=True),
+                duration=8,
+            ),
+            Scene(media=Media(path=Path("a.mp4"), duration=10), duration=10),
+            Scene(media=Media(path=Path("b.mp4"), duration=12), duration=12),
+        ],
+        transitions=[Transition(duration=4), Transition(duration=5)],
+        title_events=[],
+    )
+
+    print_render_schedule(plan)
+
+    assert capsys.readouterr().out.splitlines() == [
+        "0:04.000 a.mp4",
+        "0:09.000 b.mp4",
+    ]
+
+
+def test_format_time_uses_minutes_seconds_and_milliseconds() -> None:
+    assert format_time(64.1434) == "1:04.143"
 
 
 def test_ffmpeg_command_uses_inputs_xfade_and_title_overlay() -> None:
