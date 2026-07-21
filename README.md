@@ -56,6 +56,18 @@ the control server.
 
 ## Rendering a visual bed
 
+Use `scripts/loop_tester.py` to preview candidate videos before converting them
+into ping-pong loops:
+
+```bash
+scripts/loop_tester.py videos/*.mp4
+```
+
+For each file, the script plays a 10-second preview of the looped result. Enter
+`r` to replay, `l` to accept the loop, or return to skip the file. Accepted
+files are written as `name-looped.mp4`, and the original files are moved into an
+`originals/` subdirectory next to the source file.
+
 Use `scripts/render.py` to turn looped videos and still images into one prepared
 video for Twitcho:
 
