@@ -33,6 +33,7 @@ def auto_test(video: Path) -> None:
     if not video.exists():
         sys.exit(f"{video} does not exist")
 
+    print(f"Comparing loop endpoints for {video}...")
     difference = endpoint_difference(video)
     if difference < NON_LOOP_MEAN_DIFFERENCE:
         print(f"Leaving possible loop in place: {video} ({difference:.1f})")
@@ -102,9 +103,11 @@ def write_loop(video: Path, output: Path) -> None:
     if output.exists():
         sys.exit(f"{output} already exists")
     output.parent.mkdir(exist_ok=True)
+    print(f"Counting frames in {video}...")
     frame_count = loop_videos.count_frames(video)
     if frame_count < 3:
         sys.exit(f"{video} has fewer than 3 frames")
+    print(f"Writing loop to {output}...")
     run_silent(loop_videos.ffmpeg_command(video, output, frame_count))
 
 
@@ -114,6 +117,7 @@ def move_original(video: Path) -> Path:
     target = originals / video.name
     if target.exists():
         sys.exit(f"{target} already exists")
+    print(f"Moving original to {target}...")
     shutil.move(video.as_posix(), target.as_posix())
     return target
 

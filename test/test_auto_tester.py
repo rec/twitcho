@@ -21,6 +21,7 @@ def test_mean_difference_treats_identical_frames_as_possible_loop() -> None:
 
 
 def test_auto_test_loops_definite_non_loop(
+    capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -37,12 +38,19 @@ def test_auto_test_loops_definite_non_loop(
 
     auto_tester.auto_test(video)
 
+    output = capsys.readouterr().out
+    assert "Comparing loop endpoints" in output
+    assert "Looping definitely non-loop file" in output
+    assert "Counting frames" in output
+    assert "Writing loop" in output
+    assert "Moving original" in output
     assert (tmp_path / "loops" / "movie-looped.mp4").read_text() == "looped"
     assert (tmp_path / "originals" / "movie.mp4").read_text() == "original"
     assert not video.exists()
 
 
 def test_auto_test_leaves_possible_loop_in_place(
+    capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -53,6 +61,9 @@ def test_auto_test_leaves_possible_loop_in_place(
 
     auto_tester.auto_test(video)
 
+    output = capsys.readouterr().out
+    assert "Comparing loop endpoints" in output
+    assert "Leaving possible loop in place" in output
     assert video.read_text() == "possible loop"
     assert not (tmp_path / "loops").exists()
     assert not (tmp_path / "originals").exists()
