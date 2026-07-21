@@ -31,14 +31,10 @@ def test_loop(video: Path) -> None:
         return
     if not video.exists():
         sys.exit(f"{video} does not exist")
-    if looped_output(video).exists():
-        sys.exit(f"{looped_output(video)} already exists")
 
     with tempfile.TemporaryDirectory(prefix="twitcho-loop-test-") as directory:
         preview = Path(directory) / loop_videos.looped_path(video).name
         playback = Path(directory) / f"{preview.stem}-preview{preview.suffix}"
-        print(f"Converting {video} into a temporary loop preview...")
-        write_loop(video, preview)
         print(f"Preparing playback preview for {video}...")
         write_playback_preview(video, playback)
         while True:
@@ -49,6 +45,8 @@ def test_loop(video: Path) -> None:
             if answer == "r":
                 continue
             if answer == "l":
+                print(f"Converting {video} into a temporary loop...")
+                write_loop(video, preview)
                 print(f"Moving accepted loop into {loops_directory(video)}/...")
                 accept_loop(video, preview)
                 return
@@ -166,6 +164,8 @@ def duration(video: Path) -> float:
 
 def accept_loop(video: Path, preview: Path) -> None:
     output = looped_output(video)
+    if output.exists():
+        sys.exit(f"{output} already exists")
     output.parent.mkdir(exist_ok=True)
     originals = video.parent / "originals"
     originals.mkdir(exist_ok=True)

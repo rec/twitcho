@@ -96,7 +96,7 @@ def test_test_loop_prints_controls_before_preview(
     calls: list[str] = []
 
     def write_loop(video: Path, preview: Path) -> None:
-        preview.touch()
+        calls.append("write-loop")
 
     def play_preview(preview: Path) -> None:
         calls.append("play")
@@ -114,7 +114,6 @@ def test_test_loop_prints_controls_before_preview(
     loop_tester.test_loop(video)
 
     output = capsys.readouterr().out
-    assert "Converting" in output
     assert "Preparing playback preview" in output
     assert "Playing preview" in output
     assert "r=replay, l=loop, m=mark as looping, return=skip" in output
@@ -129,17 +128,21 @@ def test_test_loop_marks_existing_loop(
 ) -> None:
     video = tmp_path / "movie.mp4"
     video.write_text("original")
+    calls: list[str] = []
 
     def write_loop(video: Path, preview: Path) -> None:
-        preview.touch()
+        calls.append("write-loop")
 
     monkeypatch.setattr(loop_tester, "write_loop", write_loop)
-    monkeypatch.setattr(loop_tester, "write_playback_preview", write_loop)
+    monkeypatch.setattr(
+        loop_tester, "write_playback_preview", lambda video, output: None
+    )
     monkeypatch.setattr(loop_tester, "play_preview", lambda preview: None)
     monkeypatch.setattr("builtins.input", lambda prompt: "m")
 
     loop_tester.test_loop(video)
 
+    assert calls == []
     assert not video.exists()
     assert (tmp_path / "loops" / "movie.mp4").read_text() == "original"
     assert not (tmp_path / "loops" / "movie-looped.mp4").exists()
@@ -167,3 +170,28 @@ def test_test_loop_replays_before_accepting(monkeypatch, tmp_path: Path) -> None
     assert calls == ["play", "play"]
     assert (tmp_path / "loops" / "movie-looped.mp4").exists()
     assert (tmp_path / "originals" / "movie.mp4").read_text() == "original"
+
+
+def test_test_loop_accept_generates_loop_after_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    video = tmp_path / "movie.mp4"
+    video.write_text("original")
+    calls: list[str] = []
+
+    def write_loop(video: Path, preview: Path) -> None:
+        calls.append("write-loop")
+        preview.write_text("looped")
+
+    monkeypatch.setattr(loop_tester, "write_loop", write_loop)
+    monkeypatch.setattr(
+        loop_tester, "write_playback_preview", lambda video, output: None
+    )
+    monkeypatch.setattr(loop_tester, "play_preview", lambda preview: None)
+    monkeypatch.setattr("builtins.input", lambda prompt: "l")
+
+    loop_tester.test_loop(video)
+
+    assert calls == ["write-loop"]
+    assert (tmp_path / "loops" / "movie-looped.mp4").read_text() == "looped"
