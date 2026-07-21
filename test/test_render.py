@@ -50,6 +50,13 @@ def test_fade_duration_uses_half_longer_still_for_two_stills() -> None:
     assert fade_duration(first, second) == 15
 
 
+def test_fade_duration_is_capped_below_ffmpeg_limit() -> None:
+    first = Scene(media=Media(path=Path("a.mp4"), duration=200), duration=200)
+    second = Scene(media=Media(path=Path("b.mp4"), duration=10), duration=10)
+
+    assert fade_duration(first, second) == render.MAX_XFADE_DURATION
+
+
 def test_build_plan_is_seeded_and_avoids_immediate_repeats() -> None:
     config = RenderConfig(
         inputs=[Path("a.mp4"), Path("b.mp4")],

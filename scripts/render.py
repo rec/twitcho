@@ -14,6 +14,7 @@ from twitcho.programs import run_silent
 BLACK = Path("__black__")
 IMAGE_SUFFIXES = {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
 MARKDOWN_SUFFIXES = {".markdown", ".md"}
+MAX_XFADE_DURATION = 59.999
 
 
 class Media(BaseModel):
@@ -383,7 +384,10 @@ def choose_media(rng: random.Random, media: list[Media], current: Media) -> Medi
 
 
 def fade_duration(current: Scene, next_scene: Scene) -> float:
-    return max(natural_duration(current), natural_duration(next_scene)) / 2
+    return min(
+        MAX_XFADE_DURATION,
+        max(natural_duration(current), natural_duration(next_scene)) / 2,
+    )
 
 
 def natural_duration(scene: Scene) -> float:
