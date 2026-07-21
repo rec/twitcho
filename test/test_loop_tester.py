@@ -22,7 +22,7 @@ def test_preview_command_starts_at_zero_for_short_videos() -> None:
     assert command[command.index("-ss") + 1] == "0.000"
 
 
-def test_test_loop_ignores_looped_files(monkeypatch, tmp_path: Path) -> None:
+def test_test_loop_moves_looped_files_to_loops(monkeypatch, tmp_path: Path) -> None:
     video = tmp_path / "movie-looped.mp4"
     video.write_text("looped")
     calls: list[str] = []
@@ -35,6 +35,18 @@ def test_test_loop_ignores_looped_files(monkeypatch, tmp_path: Path) -> None:
     loop_tester.test_loop(video)
 
     assert calls == []
+    assert not video.exists()
+    assert (tmp_path / "loops" / "movie-looped.mp4").read_text() == "looped"
+
+
+def test_move_to_loops_keeps_files_already_in_loops(tmp_path: Path) -> None:
+    loops = tmp_path / "loops"
+    loops.mkdir()
+    video = loops / "movie-looped.mp4"
+    video.write_text("looped")
+
+    assert loop_tester.move_to_loops(video) == video
+    assert video.read_text() == "looped"
 
 
 def test_accept_loop_moves_preview_and_original(tmp_path: Path) -> None:
@@ -45,7 +57,7 @@ def test_accept_loop_moves_preview_and_original(tmp_path: Path) -> None:
 
     loop_tester.accept_loop(video, preview)
 
-    assert (tmp_path / "movie-looped.mp4").read_text() == "looped"
+    assert (tmp_path / "loops" / "movie-looped.mp4").read_text() == "looped"
     assert (tmp_path / "originals" / "movie.mp4").read_text() == "original"
     assert not video.exists()
     assert not preview.exists()
@@ -74,8 +86,9 @@ def test_test_loop_prints_controls_before_preview(
 
     assert "r=replay, l=loop, return=skip" in capsys.readouterr().out
     assert calls == ["play"]
-    assert video.read_text() == "original"
-    assert not (tmp_path / "movie-looped.mp4").exists()
+    assert not video.exists()
+    assert (tmp_path / "loops" / "movie.mp4").read_text() == "original"
+    assert not (tmp_path / "loops" / "movie-looped.mp4").exists()
 
 
 def test_test_loop_replays_before_accepting(monkeypatch, tmp_path: Path) -> None:
@@ -97,5 +110,5 @@ def test_test_loop_replays_before_accepting(monkeypatch, tmp_path: Path) -> None
     loop_tester.test_loop(video)
 
     assert calls == ["play", "play"]
-    assert (tmp_path / "movie-looped.mp4").exists()
+    assert (tmp_path / "loops" / "movie-looped.mp4").exists()
     assert (tmp_path / "originals" / "movie.mp4").read_text() == "original"

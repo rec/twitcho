@@ -17,17 +17,20 @@ def main() -> None:
     args = parser.parse_args()
 
     for video in args.videos:
-        if not ignored(video):
+        if ignored(video):
+            move_to_loops(video)
+        else:
             test_loop(video)
 
 
 def test_loop(video: Path) -> None:
     if ignored(video):
+        move_to_loops(video)
         return
     if not video.exists():
         sys.exit(f"{video} does not exist")
-    if loop_videos.looped_path(video).exists():
-        sys.exit(f"{loop_videos.looped_path(video)} already exists")
+    if looped_output(video).exists():
+        sys.exit(f"{looped_output(video)} already exists")
 
     with tempfile.TemporaryDirectory(prefix="twitcho-loop-test-") as directory:
         preview = Path(directory) / loop_videos.looped_path(video).name
@@ -42,12 +45,35 @@ def test_loop(video: Path) -> None:
                 accept_loop(video, preview)
                 return
             if answer == "":
+                move_to_loops(video)
                 return
             print("Please enter r, l, or return.", file=sys.stderr)
 
 
 def ignored(video: Path) -> bool:
     return "looped" in video.name.lower()
+
+
+def loops_directory(video: Path) -> Path:
+    return video.parent / "loops"
+
+
+def looped_output(video: Path) -> Path:
+    return loops_directory(video) / loop_videos.looped_path(video).name
+
+
+def move_to_loops(video: Path) -> Path:
+    if not video.exists():
+        sys.exit(f"{video} does not exist")
+    if video.parent.name == "loops":
+        return video
+    loops = loops_directory(video)
+    loops.mkdir(exist_ok=True)
+    target = loops / video.name
+    if target.exists():
+        sys.exit(f"{target} already exists")
+    shutil.move(video.as_posix(), target.as_posix())
+    return target
 
 
 def write_loop(video: Path, output: Path) -> None:
@@ -97,7 +123,8 @@ def duration(video: Path) -> float:
 
 
 def accept_loop(video: Path, preview: Path) -> None:
-    output = loop_videos.looped_path(video)
+    output = looped_output(video)
+    output.parent.mkdir(exist_ok=True)
     originals = video.parent / "originals"
     originals.mkdir(exist_ok=True)
     target = originals / video.name

@@ -65,9 +65,10 @@ scripts/loop_tester.py videos/*.mp4
 
 For each file, the script plays the two seconds before and after the loop point.
 Enter `r` to replay, `l` to accept the loop, or return to skip the file.
-Accepted files are written as `name-looped.mp4`, and the original files are
-moved into an `originals/` subdirectory next to the source file. Files with
-`looped` in the name are ignored.
+Files that are already loops, including skipped files and files with `looped` in
+the name, are moved into a `loops/` subdirectory. Accepted files are written as
+`loops/name-looped.mp4`, and their original files are moved into an `originals/`
+subdirectory next to the source file.
 
 Use `scripts/render.py` to turn looped videos and still images into one prepared
 video for Twitcho:
