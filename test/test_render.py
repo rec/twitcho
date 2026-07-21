@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from PIL import Image
+
 from scripts import render
 from scripts.render import (
     Media,
@@ -12,6 +14,7 @@ from scripts.render import (
     fade_duration,
     ffmpeg_command,
     filter_graph,
+    render_markdown_title_card,
     stretch_scenes_for_transitions,
     timeline_duration,
 )
@@ -170,3 +173,44 @@ def test_probe_media_uses_still_duration_for_images(
 
     assert media.duration == 30
     assert media.is_still
+
+
+def test_render_markdown_title_card_writes_png(tmp_path: Path) -> None:
+    source = tmp_path / "title.md"
+    output = tmp_path / "title.png"
+    source.write_text("# Show Title\n\n- First set\n- Second set")
+
+    render_markdown_title_card(source, output, width=320, height=180)
+
+    with Image.open(output) as image:
+        assert image.size == (320, 180)
+        assert image.format == "PNG"
+
+
+def test_render_uses_temporary_png_for_markdown_title_card(
+    monkeypatch, tmp_path: Path
+) -> None:
+    title_card = tmp_path / "title.md"
+    title_card.write_text("# Show Title")
+    configs: list[RenderConfig] = []
+
+    def render_prepared(config: RenderConfig) -> None:
+        assert config.title_card is not None
+        configs.append(config)
+        assert config.title_card.suffix == ".png"
+        assert config.title_card.exists()
+
+    monkeypatch.setattr(render, "render_prepared", render_prepared)
+
+    render.render(
+        RenderConfig(
+            inputs=[Path("input.mp4")],
+            output=tmp_path / "out.mp4",
+            title_card=title_card,
+        )
+    )
+
+    assert configs
+    assert configs[0].title_card != title_card
+    assert configs[0].title_card is not None
+    assert not configs[0].title_card.exists()

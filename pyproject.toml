@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
+    "pillow>=12.3.0",
     "pydantic>=2",
     "sounddevice",
     "tyro",
