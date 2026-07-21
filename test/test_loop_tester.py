@@ -5,24 +5,42 @@ import pytest
 from scripts import loop_tester
 
 
-def test_preview_command_uses_ffplay_loop_option() -> None:
-    command = loop_tester.preview_command(Path("movie-looped.mp4"), duration=12.25)
+def test_playback_preview_command_uses_four_second_loop_boundary_window() -> None:
+    command = loop_tester.playback_preview_command(
+        Path("movie-looped.mp4"), Path("preview.mp4"), duration=12.25
+    )
 
-    assert "-loop" in command
-    assert "0" == command[command.index("-loop") + 1]
-    assert "-stream_loop" not in command
     assert command[command.index("-ss") + 1] == "10.250"
     assert command[command.index("-t") + 1] == "4"
-    assert command[-1] == "movie-looped.mp4"
+    assert command[-1] == "preview.mp4"
 
 
-def test_preview_command_starts_at_zero_for_short_videos() -> None:
-    command = loop_tester.preview_command(Path("movie-looped.mp4"), duration=1.5)
+def test_playback_preview_command_starts_at_zero_for_short_videos() -> None:
+    command = loop_tester.playback_preview_command(
+        Path("movie-looped.mp4"), Path("preview.mp4"), duration=1.5
+    )
 
     assert command[command.index("-ss") + 1] == "0.000"
 
 
-def test_test_loop_moves_looped_files_to_loops(monkeypatch, tmp_path: Path) -> None:
+def test_preview_command_plays_finite_file_without_looping() -> None:
+    command = loop_tester.preview_command(Path("preview.mp4"))
+
+    assert command[:5] == [
+        "ffplay",
+        "-hide_banner",
+        "-loglevel",
+        "warning",
+        "-autoexit",
+    ]
+    assert "-loop" not in command
+    assert "-stream_loop" not in command
+    assert command[-1] == "preview.mp4"
+
+
+def test_test_loop_moves_looped_files_to_loops(
+    monkeypatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
     video = tmp_path / "movie-looped.mp4"
     video.write_text("looped")
     calls: list[str] = []
@@ -35,6 +53,7 @@ def test_test_loop_moves_looped_files_to_loops(monkeypatch, tmp_path: Path) -> N
     loop_tester.test_loop(video)
 
     assert calls == []
+    assert "Moving existing loop" in capsys.readouterr().out
     assert not video.exists()
     assert (tmp_path / "loops" / "movie-looped.mp4").read_text() == "looped"
 
@@ -79,12 +98,17 @@ def test_test_loop_prints_controls_before_preview(
         calls.append("play")
 
     monkeypatch.setattr(loop_tester, "write_loop", write_loop)
+    monkeypatch.setattr(loop_tester, "write_playback_preview", write_loop)
     monkeypatch.setattr(loop_tester, "play_preview", play_preview)
     monkeypatch.setattr("builtins.input", lambda prompt: "")
 
     loop_tester.test_loop(video)
 
-    assert "r=replay, l=loop, return=skip" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "Converting" in output
+    assert "Preparing playback preview" in output
+    assert "Playing preview" in output
+    assert "r=replay, l=loop, return=skip" in output
     assert calls == ["play"]
     assert not video.exists()
     assert (tmp_path / "loops" / "movie.mp4").read_text() == "original"
@@ -104,6 +128,7 @@ def test_test_loop_replays_before_accepting(monkeypatch, tmp_path: Path) -> None
         calls.append("play")
 
     monkeypatch.setattr(loop_tester, "write_loop", write_loop)
+    monkeypatch.setattr(loop_tester, "write_playback_preview", write_loop)
     monkeypatch.setattr(loop_tester, "play_preview", play_preview)
     monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
 

@@ -18,6 +18,7 @@ def main() -> None:
 
     for video in args.videos:
         if ignored(video):
+            print(f"Moving existing loop {video} into {loops_directory(video)}/")
             move_to_loops(video)
         else:
             test_loop(video)
@@ -25,6 +26,7 @@ def main() -> None:
 
 def test_loop(video: Path) -> None:
     if ignored(video):
+        print(f"Moving existing loop {video} into {loops_directory(video)}/")
         move_to_loops(video)
         return
     if not video.exists():
@@ -34,17 +36,24 @@ def test_loop(video: Path) -> None:
 
     with tempfile.TemporaryDirectory(prefix="twitcho-loop-test-") as directory:
         preview = Path(directory) / loop_videos.looped_path(video).name
+        playback = Path(directory) / f"{preview.stem}-preview{preview.suffix}"
+        print(f"Converting {video} into a temporary loop preview...")
         write_loop(video, preview)
+        print(f"Preparing playback preview for {video}...")
+        write_playback_preview(preview, playback)
         while True:
             print(f"{video} [r=replay, l=loop, return=skip]")
-            play_preview(preview)
+            print(f"Playing preview for {video}...")
+            play_preview(playback)
             answer = input("> ").strip().lower()
             if answer == "r":
                 continue
             if answer == "l":
+                print(f"Moving accepted loop into {loops_directory(video)}/...")
                 accept_loop(video, preview)
                 return
             if answer == "":
+                print(f"Moving skipped file into {loops_directory(video)}/...")
                 move_to_loops(video)
                 return
             print("Please enter r, l, or return.", file=sys.stderr)
@@ -84,23 +93,45 @@ def write_loop(video: Path, output: Path) -> None:
 
 
 def play_preview(video: Path) -> None:
-    run_silent(preview_command(video, duration=duration(video)))
+    run_silent(preview_command(video))
 
 
-def preview_command(video: Path, *, duration: float) -> list[str]:
+def write_playback_preview(video: Path, output: Path) -> None:
+    run_silent(playback_preview_command(video, output, duration=duration(video)))
+
+
+def playback_preview_command(
+    video: Path, output: Path, *, duration: float
+) -> list[str]:
     start = max(0.0, duration - 2.0)
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-y",
+        "-ss",
+        f"{start:.3f}",
+        "-i",
+        video.as_posix(),
+        "-t",
+        "4",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        output.as_posix(),
+    ]
+
+
+def preview_command(video: Path) -> list[str]:
     return [
         "ffplay",
         "-hide_banner",
         "-loglevel",
         "warning",
         "-autoexit",
-        "-loop",
-        "0",
-        "-ss",
-        f"{start:.3f}",
-        "-t",
-        "4",
         video.as_posix(),
     ]
 
