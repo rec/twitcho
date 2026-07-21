@@ -1,6 +1,7 @@
 import subprocess as sp
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 from scripts import render
@@ -217,48 +218,65 @@ def test_render_uses_temporary_png_for_markdown_title_card(
     assert not configs[0].title_card.exists()
 
 
-def test_render_visual_bed_regression(image_regression, tmp_path: Path) -> None:
+def test_render_visual_bed_regression(tmp_path: Path) -> None:
     fixtures = Path(__file__).parent / "fixtures" / "render"
     output = tmp_path / "visual-bed.mp4"
-    contact_sheet = tmp_path / "visual-bed.png"
+    expected = Path(__file__).parent / "test_render" / "test_render_visual_bed.mp4"
 
+    render_test_visual_bed(fixtures, output)
+
+    expected_frames = decode_video_frames(expected, width=160, height=90)
+    actual_frames = decode_video_frames(output, width=160, height=90)
+    assert actual_frames.shape == expected_frames.shape
+    assert np.abs(actual_frames.astype(int) - expected_frames.astype(int)).mean() < 0.5
+
+
+def render_test_visual_bed(fixtures: Path, output: Path) -> None:
     render.render(
-        RenderConfig(
-            inputs=[
-                fixtures / "blue-circle.mp4",
-                fixtures / "red-diamond.mp4",
-            ],
+        visual_bed_config(
+            fixtures=fixtures,
             output=output,
-            duration=6,
-            seed=1,
-            title_card=fixtures / "title.md",
-            width=160,
-            height=90,
-            fps=6,
-            start_black_duration=1,
-            title_duration=1,
-            title_fade=0.5,
-            title_probability=0,
-            overwrite=True,
         )
     )
-    sp.run(
+
+
+def visual_bed_config(fixtures: Path, output: Path) -> RenderConfig:
+    return RenderConfig(
+        inputs=[
+            fixtures / "blue-circle.mp4",
+            fixtures / "red-diamond.mp4",
+        ],
+        output=output,
+        duration=6,
+        seed=1,
+        title_card=fixtures / "title.md",
+        width=160,
+        height=90,
+        fps=6,
+        start_black_duration=1,
+        title_duration=1,
+        title_fade=0.5,
+        title_probability=0,
+        overwrite=True,
+    )
+
+
+def decode_video_frames(path: Path, *, width: int, height: int) -> np.ndarray:
+    result = sp.run(
         [
             "ffmpeg",
             "-hide_banner",
             "-loglevel",
             "error",
-            "-y",
             "-i",
-            output.as_posix(),
-            "-vf",
-            "fps=1,scale=160:90,tile=4x1",
-            "-frames:v",
-            "1",
-            contact_sheet.as_posix(),
+            path.as_posix(),
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-",
         ],
         check=True,
+        stdout=sp.PIPE,
     )
-
-    with Image.open(contact_sheet) as image:
-        image_regression.check(image, diff_threshold=0.5)
+    return np.frombuffer(result.stdout, dtype=np.uint8).reshape((-1, height, width, 3))
