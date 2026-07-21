@@ -5,38 +5,78 @@ from pathlib import Path
 
 from twitcho.programs import run_silent
 
+DEFAULT_MAX_BITRATE_KBPS = 1200
+DEFAULT_SOURCE_RATIO = 0.8
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Re-encode one directory of videos as 720p H.264 mezzanine files."
+        description="Re-encode videos as 720p H.264 mezzanine files."
     )
-    parser.add_argument("input_directory", type=Path)
+    parser.add_argument(
+        "--max-bitrate-kbps",
+        type=int,
+        default=DEFAULT_MAX_BITRATE_KBPS,
+        help="Maximum video bitrate for re-encoded files.",
+    )
+    parser.add_argument(
+        "--source-ratio",
+        type=float,
+        default=DEFAULT_SOURCE_RATIO,
+        help="Target this fraction of the source file bitrate.",
+    )
     parser.add_argument("output_directory", type=Path)
+    parser.add_argument("videos", nargs="+", type=Path)
     args = parser.parse_args()
 
-    reencode_directory(args.input_directory, args.output_directory)
+    reencode_files(
+        args.videos,
+        args.output_directory,
+        max_bitrate_kbps=args.max_bitrate_kbps,
+        source_ratio=args.source_ratio,
+    )
 
 
-def reencode_directory(input_directory: Path, output_directory: Path) -> None:
-    if not input_directory.is_dir():
-        sys.exit(f"{input_directory} is not a directory")
+def reencode_files(
+    videos: list[Path],
+    output_directory: Path,
+    *,
+    max_bitrate_kbps: int = DEFAULT_MAX_BITRATE_KBPS,
+    source_ratio: float = DEFAULT_SOURCE_RATIO,
+) -> None:
     if output_directory.exists() and not output_directory.is_dir():
         sys.exit(f"{output_directory} is not a directory")
 
     output_directory.mkdir(exist_ok=True)
-    for video in sorted(p for p in input_directory.iterdir() if p.is_file()):
-        reencode_video(video, output_directory / f"{video.stem}.mp4")
+    for video in videos:
+        if not video.is_file():
+            sys.exit(f"{video} is not a file")
+        reencode_video(
+            video,
+            output_directory / f"{video.stem}.mp4",
+            max_bitrate_kbps=max_bitrate_kbps,
+            source_ratio=source_ratio,
+        )
 
 
-def reencode_video(video: Path, output: Path) -> None:
+def reencode_video(
+    video: Path,
+    output: Path,
+    *,
+    max_bitrate_kbps: int = DEFAULT_MAX_BITRATE_KBPS,
+    source_ratio: float = DEFAULT_SOURCE_RATIO,
+) -> None:
     if output.exists():
         sys.exit(f"{output} already exists")
 
-    print(f"Re-encoding {video} to {output}...")
-    run_silent(reencode_command(video, output))
+    bitrate_kbps = target_bitrate_kbps(
+        video, max_bitrate_kbps=max_bitrate_kbps, source_ratio=source_ratio
+    )
+    print(f"Re-encoding {video} to {output} at {bitrate_kbps} kbps...")
+    run_silent(reencode_command(video, output, bitrate_kbps=bitrate_kbps))
 
 
-def reencode_command(video: Path, output: Path) -> list[str]:
+def reencode_command(video: Path, output: Path, *, bitrate_kbps: int) -> list[str]:
     return [
         "ffmpeg",
         "-hide_banner",
@@ -47,14 +87,45 @@ def reencode_command(video: Path, output: Path) -> list[str]:
         "-an",
         "-c:v",
         "libx264",
-        "-crf",
-        "18",
+        "-b:v",
+        f"{bitrate_kbps}k",
+        "-maxrate",
+        f"{bitrate_kbps}k",
+        "-bufsize",
+        f"{bitrate_kbps * 2}k",
         "-preset",
         "slow",
         "-pix_fmt",
         "yuv420p",
         output.as_posix(),
     ]
+
+
+def target_bitrate_kbps(
+    video: Path,
+    *,
+    max_bitrate_kbps: int = DEFAULT_MAX_BITRATE_KBPS,
+    source_ratio: float = DEFAULT_SOURCE_RATIO,
+) -> int:
+    source_kbps = video.stat().st_size * 8 / duration(video) / 1000
+    return max(1, min(max_bitrate_kbps, int(source_kbps * source_ratio)))
+
+
+def duration(video: Path) -> float:
+    result = run_silent(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=nokey=1:noprint_wrappers=1",
+            video.as_posix(),
+        ],
+        text=True,
+    )
+    return float(result.stdout.strip())
 
 
 if __name__ == "__main__":
