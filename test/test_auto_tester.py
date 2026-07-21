@@ -69,6 +69,31 @@ def test_auto_test_leaves_possible_loop_in_place(
     assert not (tmp_path / "originals").exists()
 
 
+def test_auto_test_uses_configured_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    video = tmp_path / "movie.mp4"
+    video.write_text("candidate")
+
+    monkeypatch.setattr(auto_tester, "endpoint_difference", lambda video: 12.0)
+
+    def write_loop(video: Path, output: Path) -> None:
+        output.parent.mkdir()
+        output.touch()
+
+    monkeypatch.setattr(auto_tester, "write_loop", write_loop)
+    monkeypatch.setattr(auto_tester, "move_original", lambda video: video)
+
+    auto_tester.auto_test(video, threshold=10.0)
+
+    assert (tmp_path / "loops" / "movie-looped.mp4").exists()
+
+
+def test_auto_test_default_threshold_accepts_ten() -> None:
+    assert auto_tester.DEFAULT_THRESHOLD == 10.0
+
+
 def test_auto_test_leaves_looped_names_in_place(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

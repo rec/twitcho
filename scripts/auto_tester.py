@@ -12,21 +12,27 @@ from twitcho.programs import run_silent
 FRAME_SIZE = 64
 FRAME_CHANNELS = 3
 FRAME_BYTE_COUNT = FRAME_SIZE * FRAME_SIZE * FRAME_CHANNELS
-NON_LOOP_MEAN_DIFFERENCE = 18.0
+DEFAULT_THRESHOLD = 10.0
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Automatically loop videos that are clearly not seamless loops."
     )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=DEFAULT_THRESHOLD,
+        help="Mean endpoint-frame difference needed to auto-loop a file.",
+    )
     parser.add_argument("videos", nargs="+", type=Path)
     args = parser.parse_args()
 
     for video in args.videos:
-        auto_test(video)
+        auto_test(video, threshold=args.threshold)
 
 
-def auto_test(video: Path) -> None:
+def auto_test(video: Path, *, threshold: float = DEFAULT_THRESHOLD) -> None:
     if ignored(video):
         print(f"Leaving possible loop in place: {video}")
         return
@@ -35,7 +41,7 @@ def auto_test(video: Path) -> None:
 
     print(f"Comparing loop endpoints for {video}...")
     difference = endpoint_difference(video)
-    if difference < NON_LOOP_MEAN_DIFFERENCE:
+    if difference < threshold:
         print(f"Leaving possible loop in place: {video} ({difference:.1f})")
         return
 
