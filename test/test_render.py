@@ -1,3 +1,4 @@
+import subprocess as sp
 from pathlib import Path
 
 from PIL import Image
@@ -214,3 +215,50 @@ def test_render_uses_temporary_png_for_markdown_title_card(
     assert configs[0].title_card != title_card
     assert configs[0].title_card is not None
     assert not configs[0].title_card.exists()
+
+
+def test_render_visual_bed_regression(image_regression, tmp_path: Path) -> None:
+    fixtures = Path(__file__).parent / "fixtures" / "render"
+    output = tmp_path / "visual-bed.mp4"
+    contact_sheet = tmp_path / "visual-bed.png"
+
+    render.render(
+        RenderConfig(
+            inputs=[
+                fixtures / "blue-circle.mp4",
+                fixtures / "red-diamond.mp4",
+            ],
+            output=output,
+            duration=6,
+            seed=1,
+            title_card=fixtures / "title.md",
+            width=160,
+            height=90,
+            fps=6,
+            start_black_duration=1,
+            title_duration=1,
+            title_fade=0.5,
+            title_probability=0,
+            overwrite=True,
+        )
+    )
+    sp.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            output.as_posix(),
+            "-vf",
+            "fps=1,scale=160:90,tile=4x1",
+            "-frames:v",
+            "1",
+            contact_sheet.as_posix(),
+        ],
+        check=True,
+    )
+
+    with Image.open(contact_sheet) as image:
+        image_regression.check(image, diff_threshold=0.5)
