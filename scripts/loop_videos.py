@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import argparse
-import subprocess as sp
 import sys
 from pathlib import Path
+
+from twitcho.programs import run_silent
 
 
 def main() -> None:
@@ -28,7 +29,7 @@ def loop_video(video: Path) -> Path:
     if frame_count < 3:
         sys.exit(f"{video} has fewer than 3 frames")
 
-    sp.run(ffmpeg_command(video, output, frame_count), check=True)
+    run_silent(ffmpeg_command(video, output, frame_count))
     return output
 
 
@@ -37,7 +38,7 @@ def looped_path(video: Path) -> Path:
 
 
 def count_frames(video: Path) -> int:
-    result = sp.run(
+    result = run_silent(
         [
             "ffprobe",
             "-v",
@@ -51,9 +52,7 @@ def count_frames(video: Path) -> int:
             "default=nokey=1:noprint_wrappers=1",
             video.as_posix(),
         ],
-        check=True,
         text=True,
-        stdout=sp.PIPE,
     )
     return int(result.stdout.strip())
 

@@ -1,0 +1,83 @@
+import subprocess as sp
+import sys
+import threading
+from collections import deque
+from collections.abc import Sequence
+
+
+class OutputTail:
+    def __init__(self, line_count: int = 80) -> None:
+        self._lines: deque[str] = deque(maxlen=line_count)
+        self._lock = threading.Lock()
+
+    def append(self, line: str) -> None:
+        with self._lock:
+            self._lines.append(line)
+
+    def text(self) -> str:
+        with self._lock:
+            return "".join(self._lines).strip()
+
+
+def run_silent(command: Sequence[str], *, text: bool = False) -> sp.CompletedProcess:
+    try:
+        return sp.run(
+            command,
+            check=True,
+            text=text,
+            stdout=sp.PIPE,
+            stderr=sp.PIPE,
+        )
+    except sp.CalledProcessError as error:
+        report_failed_command(command, error.stdout, error.stderr)
+        raise
+
+
+def capture_process_stderr(process: sp.Popen[bytes]) -> OutputTail:
+    tail = OutputTail()
+    if process.stderr is not None:
+        thread = threading.Thread(
+            target=read_stderr,
+            args=(process, tail),
+            name="TwitchoProcessOutput",
+            daemon=True,
+        )
+        thread.start()
+    return tail
+
+
+def read_stderr(process: sp.Popen[bytes], tail: OutputTail) -> None:
+    assert process.stderr is not None
+    for line in process.stderr:
+        tail.append(line.decode(errors="replace"))
+
+
+def report_failed_process(command: Sequence[str], tail: OutputTail) -> None:
+    report_failed_command(command, None, tail.text())
+
+
+def report_failed_command(
+    command: Sequence[str], stdout: str | bytes | None, stderr: str | bytes | None
+) -> None:
+    print(f"Command failed: {format_command(command)}", file=sys.stderr)
+    write_output("stdout", stdout)
+    write_output("stderr", stderr)
+
+
+def write_output(label: str, output: str | bytes | None) -> None:
+    text = decode_output(output)
+    if text:
+        print(f"{label}:", file=sys.stderr)
+        print(text, file=sys.stderr)
+
+
+def decode_output(output: str | bytes | None) -> str:
+    if output is None:
+        return ""
+    if isinstance(output, bytes):
+        return output.decode(errors="replace").strip()
+    return output.strip()
+
+
+def format_command(command: Sequence[str]) -> str:
+    return " ".join(command)

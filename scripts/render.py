@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import random
 import re
-import subprocess as sp
 import sys
 import tempfile
 from pathlib import Path
@@ -9,6 +8,8 @@ from pathlib import Path
 import tyro
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel
+
+from twitcho.programs import run_silent
 
 BLACK = Path("__black__")
 IMAGE_SUFFIXES = {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
@@ -121,7 +122,7 @@ def render_prepared(config: RenderConfig) -> None:
     media = [probe_media(path, config.still_duration) for path in config.inputs]
     plan = build_plan(config, media)
     command = ffmpeg_command(config, plan)
-    sp.run(command, check=True)
+    run_silent(command)
 
 
 def validate_config(config: RenderConfig) -> None:
@@ -296,7 +297,7 @@ def probe_media(path: Path, still_duration: float) -> Media:
 
 
 def probe_duration(path: Path) -> float:
-    result = sp.run(
+    result = run_silent(
         [
             "ffprobe",
             "-v",
@@ -309,9 +310,7 @@ def probe_duration(path: Path) -> float:
             "default=nokey=1:noprint_wrappers=1",
             path.as_posix(),
         ],
-        check=True,
         text=True,
-        stdout=sp.PIPE,
     )
     return float(result.stdout.strip())
 

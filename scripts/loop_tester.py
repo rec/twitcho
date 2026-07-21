@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 import shutil
-import subprocess as sp
 import sys
 import tempfile
 from pathlib import Path
 
 from scripts import loop_videos
+from twitcho.programs import run_silent
 
 
 def main() -> None:
@@ -46,11 +46,11 @@ def write_loop(video: Path, output: Path) -> None:
     frame_count = loop_videos.count_frames(video)
     if frame_count < 3:
         sys.exit(f"{video} has fewer than 3 frames")
-    sp.run(loop_videos.ffmpeg_command(video, output, frame_count), check=True)
+    run_silent(loop_videos.ffmpeg_command(video, output, frame_count))
 
 
 def play_preview(video: Path) -> None:
-    sp.run(preview_command(video), check=True)
+    run_silent(preview_command(video))
 
 
 def preview_command(video: Path) -> list[str]:

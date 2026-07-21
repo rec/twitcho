@@ -12,6 +12,7 @@ from .control import (
     start_control_server,
     stop_control_server,
 )
+from .programs import capture_process_stderr, report_failed_process
 
 
 def stream(config: Twitcho) -> None:
@@ -21,10 +22,14 @@ def stream(config: Twitcho) -> None:
     if config.control_enabled:
         server, thread = start_control_server(config, controller)
 
+    requested_stop = False
     process = sp.Popen(
         ffmpeg_command(config),
         stdin=sp.PIPE,
+        stdout=sp.DEVNULL,
+        stderr=sp.PIPE,
     )
+    ffmpeg_output = capture_process_stderr(process)
     try:
         state.set_ffmpeg(alive=True)
         state.set_state("streaming")
@@ -39,11 +44,15 @@ def stream(config: Twitcho) -> None:
         ):
             while process.poll() is None:
                 if should_stop(controller):
+                    requested_stop = True
                     state.set_state("stopping")
                     process.terminate()
                     break
                 time.sleep(0.05)
-            state.set_ffmpeg(alive=False, returncode=process.wait())
+            returncode = process.wait()
+            state.set_ffmpeg(alive=False, returncode=returncode)
+            if returncode and not requested_stop:
+                report_failed_process(ffmpeg_command(config), ffmpeg_output)
     except KeyboardInterrupt:
         state.set_state("stopping")
         process.terminate()
