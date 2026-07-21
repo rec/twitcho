@@ -10,8 +10,11 @@ def test_playback_preview_command_uses_four_second_loop_boundary_window() -> Non
         Path("movie-looped.mp4"), Path("preview.mp4"), duration=12.25
     )
 
-    assert command[command.index("-ss") + 1] == "10.250"
-    assert command[command.index("-t") + 1] == "4"
+    filters = command[command.index("-filter_complex") + 1]
+    assert "trim=start=10.250:end=12.250" in filters
+    assert "trim=start=0.000:end=2.000" in filters
+    assert "[tail][head]concat=n=2:v=1:a=0[out]" in filters
+    assert command[command.index("-map") + 1] == "[out]"
     assert command[-1] == "preview.mp4"
 
 
@@ -20,7 +23,8 @@ def test_playback_preview_command_starts_at_zero_for_short_videos() -> None:
         Path("movie-looped.mp4"), Path("preview.mp4"), duration=1.5
     )
 
-    assert command[command.index("-ss") + 1] == "0.000"
+    filters = command[command.index("-filter_complex") + 1]
+    assert filters.count("trim=start=0.000:end=1.500") == 2
 
 
 def test_preview_command_plays_finite_file_without_looping() -> None:

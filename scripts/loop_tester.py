@@ -103,17 +103,25 @@ def write_playback_preview(video: Path, output: Path) -> None:
 def playback_preview_command(
     video: Path, output: Path, *, duration: float
 ) -> list[str]:
-    start = max(0.0, duration - 2.0)
+    tail_start = max(0.0, duration - 2.0)
+    head_end = min(2.0, duration)
+    filters = (
+        f"[0:v]trim=start={tail_start:.3f}:end={duration:.3f},"
+        "setpts=PTS-STARTPTS[tail];"
+        f"[0:v]trim=start=0.000:end={head_end:.3f},"
+        "setpts=PTS-STARTPTS[head];"
+        "[tail][head]concat=n=2:v=1:a=0[out]"
+    )
     return [
         "ffmpeg",
         "-hide_banner",
         "-y",
-        "-ss",
-        f"{start:.3f}",
         "-i",
         video.as_posix(),
-        "-t",
-        "4",
+        "-filter_complex",
+        filters,
+        "-map",
+        "[out]",
         "-an",
         "-c:v",
         "libx264",
