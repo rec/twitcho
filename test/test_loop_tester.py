@@ -112,8 +112,29 @@ def test_test_loop_prints_controls_before_preview(
     assert "Converting" in output
     assert "Preparing playback preview" in output
     assert "Playing preview" in output
-    assert "r=replay, l=loop, return=skip" in output
+    assert "r=replay, l=loop, m=mark as looping, return=skip" in output
     assert calls == ["play"]
+    assert video.read_text() == "original"
+    assert not (tmp_path / "loops").exists()
+
+
+def test_test_loop_marks_existing_loop(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    video = tmp_path / "movie.mp4"
+    video.write_text("original")
+
+    def write_loop(video: Path, preview: Path) -> None:
+        preview.touch()
+
+    monkeypatch.setattr(loop_tester, "write_loop", write_loop)
+    monkeypatch.setattr(loop_tester, "write_playback_preview", write_loop)
+    monkeypatch.setattr(loop_tester, "play_preview", lambda preview: None)
+    monkeypatch.setattr("builtins.input", lambda prompt: "m")
+
+    loop_tester.test_loop(video)
+
     assert not video.exists()
     assert (tmp_path / "loops" / "movie.mp4").read_text() == "original"
     assert not (tmp_path / "loops" / "movie-looped.mp4").exists()

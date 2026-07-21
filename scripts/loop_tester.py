@@ -42,7 +42,7 @@ def test_loop(video: Path) -> None:
         print(f"Preparing playback preview for {video}...")
         write_playback_preview(preview, playback)
         while True:
-            print(f"{video} [r=replay, l=loop, return=skip]")
+            print(f"{video} [r=replay, l=loop, m=mark as looping, return=skip]")
             print(f"Playing preview for {video}...")
             play_preview(playback)
             answer = input("> ").strip().lower()
@@ -52,11 +52,14 @@ def test_loop(video: Path) -> None:
                 print(f"Moving accepted loop into {loops_directory(video)}/...")
                 accept_loop(video, preview)
                 return
-            if answer == "":
-                print(f"Moving skipped file into {loops_directory(video)}/...")
+            if answer == "m":
+                print(f"Moving looping file into {loops_directory(video)}/...")
                 move_to_loops(video)
                 return
-            print("Please enter r, l, or return.", file=sys.stderr)
+            if answer == "":
+                print(f"Leaving skipped file in place: {video}")
+                return
+            print("Please enter r, l, m, or return.", file=sys.stderr)
 
 
 def ignored(video: Path) -> bool:
