@@ -81,7 +81,7 @@ def should_stop(controller: ControlController) -> bool:
 
 
 def ffmpeg_command(config: Twitcho) -> list[str]:
-    return [
+    command = [
         "ffmpeg",
         "-hide_banner",
         "-loglevel",
@@ -99,36 +99,98 @@ def ffmpeg_command(config: Twitcho) -> list[str]:
         "-1",
         "-i",
         config.video.as_posix(),
-        "-map",
-        "1:v:0",
-        "-map",
-        "0:a:0",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-tune",
-        "animation",
-        "-b:v",
-        config.video_bitrate,
-        "-pix_fmt",
-        "yuv420p",
-        "-r",
-        str(config.video_frame_rate),
-        "-s",
-        config.video_resolution,
-        "-c:a",
-        "aac",
-        "-b:a",
-        config.audio_bitrate,
-        "-ar",
-        str(config.sample_rate),
-        "-ac",
-        "2",
-        "-f",
-        "flv",
-        config.rtmp_url,
     ]
+    if config.title_card is not None:
+        command.extend(title_input_args(config))
+        command.extend(["-filter_complex", title_filter(config), "-map", "[video]"])
+    else:
+        command.extend(["-map", "1:v:0"])
+    command.extend(
+        [
+            "-map",
+            "0:a:0",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-tune",
+            "animation",
+            "-b:v",
+            config.video_bitrate,
+            "-pix_fmt",
+            "yuv420p",
+            "-r",
+            str(config.video_frame_rate),
+            "-s",
+            config.video_resolution,
+            "-c:a",
+            "aac",
+            "-b:a",
+            config.audio_bitrate,
+            "-ar",
+            str(config.sample_rate),
+            "-ac",
+            "2",
+            "-f",
+            "flv",
+            config.rtmp_url,
+        ]
+    )
+    return command
+
+
+def title_input_args(config: Twitcho) -> list[str]:
+    assert config.title_card is not None
+    gap_duration = config.title_interval - config.title_duration
+    width, height = video_size(config)
+    return [
+        "-loop",
+        "1",
+        "-t",
+        f"{config.title_duration:.6f}",
+        "-i",
+        config.title_card.as_posix(),
+        "-f",
+        "lavfi",
+        "-t",
+        f"{gap_duration:.6f}",
+        "-i",
+        (
+            "color="
+            f"c=black@0.0:s={width}x{height}:"
+            f"r={config.video_frame_rate}:d={gap_duration:.6f}"
+        ),
+    ]
+
+
+def title_filter(config: Twitcho) -> str:
+    width, height = video_size(config)
+    fade_out_start = max(0.0, config.title_duration - config.title_fade)
+    loop_frames = max(1, round(config.title_interval * config.video_frame_rate))
+    return (
+        "[1:v]"
+        f"scale={width}:{height},fps={config.video_frame_rate},"
+        "format=yuv420p[base];"
+        "[2:v]"
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,"
+        f"fps={config.video_frame_rate},format=rgba,"
+        f"trim=duration={config.title_duration:.6f},"
+        "setpts=PTS-STARTPTS,"
+        f"fade=t=in:st=0:d={config.title_fade:.6f}:alpha=1,"
+        f"fade=t=out:st={fade_out_start:.6f}:d={config.title_fade:.6f}:alpha=1"
+        "[title_visible];"
+        "[3:v]format=rgba,setpts=PTS-STARTPTS[title_gap];"
+        "[title_visible][title_gap]concat=n=2:v=1:a=0,"
+        f"loop=loop=-1:size={loop_frames}:start=0,"
+        "setpts=N/FRAME_RATE/TB[title_loop];"
+        "[base][title_loop]overlay=(W-w)/2:(H-h)/2:eof_action=repeat[video]"
+    )
+
+
+def video_size(config: Twitcho) -> tuple[int, int]:
+    width, height = config.video_resolution.lower().split("x", maxsplit=1)
+    return int(width), int(height)
 
 
 def select_stereo_pair(config: Twitcho, data: np.ndarray) -> np.ndarray:

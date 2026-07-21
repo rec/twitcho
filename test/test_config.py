@@ -26,3 +26,30 @@ def test_twitcho_requires_stereo_pair_start_channel() -> None:
 
     assert config.required_channels == 18
     assert config.rtmp_url == "rtmp://live.twitch.tv/app/key"
+
+
+def test_title_card_must_exist() -> None:
+    with pytest.raises(ValidationError, match="does not exist"):
+        Twitcho(
+            device_name="X18",
+            channel=1,
+            video=Path("visual-bed.mp4"),
+            twitch_key="key",
+            title_card=Path("missing-title.png"),
+        )
+
+
+def test_title_duration_must_fit_interval(tmp_path: Path) -> None:
+    title = tmp_path / "title.png"
+    title.touch()
+
+    with pytest.raises(ValidationError, match="shorter than title_interval"):
+        Twitcho(
+            device_name="X18",
+            channel=1,
+            video=Path("visual-bed.mp4"),
+            twitch_key="key",
+            title_card=title,
+            title_interval=8,
+            title_duration=8,
+        )

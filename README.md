@@ -14,7 +14,8 @@ Create a JSON config file:
   "device_name": "X18",
   "channel": 17,
   "video": "visual-bed.mp4",
-  "twitch_key": "live_..."
+  "twitch_key": "live_...",
+  "title_card": "title.png"
 }
 ```
 
@@ -28,6 +29,12 @@ twitcho --config config.json
 example, `17` streams channels 17 and 18.
 
 `twitcho` requires `ffmpeg` to be installed.
+
+If `title_card` is set, Twitcho overlays that image on the outgoing stream
+without changing the prepared visual-bed video. The title card appears at stream
+start and then repeats every `title_interval` seconds. The defaults are an
+8-second title every 180 seconds with 2-second fade in and out. These can be
+changed with `title_interval`, `title_duration`, and `title_fade`.
 
 ## Show-control connection
 

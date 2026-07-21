@@ -6,7 +6,13 @@ import pytest
 
 from twitcho.config import Twitcho
 from twitcho.control import RuntimeState
-from twitcho.streamer import _audio_callback, ffmpeg_command, select_stereo_pair
+from twitcho.streamer import (
+    _audio_callback,
+    ffmpeg_command,
+    select_stereo_pair,
+    title_filter,
+    video_size,
+)
 
 
 def _config() -> Twitcho:
@@ -35,7 +41,51 @@ def test_ffmpeg_command_streams_audio_pipe_and_video_loop() -> None:
     ]
     assert "visual-bed.mp4" in command
     assert "-stream_loop" in command
+    assert "-filter_complex" not in command
     assert command[-1] == "rtmp://live.twitch.tv/app/key"
+
+
+def test_ffmpeg_command_overlays_title_card(tmp_path: Path) -> None:
+    title = tmp_path / "title.png"
+    title.touch()
+    config = _config().model_copy(update={"title_card": title})
+
+    command = ffmpeg_command(config)
+    graph = command[command.index("-filter_complex") + 1]
+
+    assert title.as_posix() in command
+    assert "color=c=black@0.0:s=640x360:r=10:d=172.000000" in command
+    assert command[command.index("-map") + 1] == "[video]"
+    assert "[base][title_loop]overlay=(W-w)/2:(H-h)/2" in graph
+    assert "fade=t=in:st=0:d=2.000000:alpha=1" in graph
+    assert "fade=t=out:st=6.000000:d=2.000000:alpha=1" in graph
+    assert "loop=loop=-1:size=1800:start=0" in graph
+
+
+def test_video_size_parses_resolution() -> None:
+    assert video_size(_config()) == (640, 360)
+
+
+def test_title_filter_uses_configured_timing(tmp_path: Path) -> None:
+    title = tmp_path / "title.png"
+    title.touch()
+    config = _config().model_copy(
+        update={
+            "title_card": title,
+            "title_interval": 60,
+            "title_duration": 10,
+            "title_fade": 3,
+            "video_frame_rate": 24,
+            "video_resolution": "1280x720",
+        }
+    )
+
+    graph = title_filter(config)
+
+    assert "scale=1280:720" in graph
+    assert "fps=24" in graph
+    assert "fade=t=out:st=7.000000:d=3.000000:alpha=1" in graph
+    assert "loop=loop=-1:size=1440:start=0" in graph
 
 
 def test_select_stereo_pair_uses_one_based_channel_number() -> None:
