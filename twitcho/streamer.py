@@ -13,11 +13,12 @@ from .control import (
     stop_control_server,
 )
 from .programs import capture_process_stderr, report_failed_process
+from .twitch_api import TwitchApi
 
 
 def stream(config: Twitcho) -> None:
     state = RuntimeState()
-    controller = ControlController(state=state)
+    controller = ControlController(state=state, twitch=TwitchApi.from_config(config))
     server = thread = None
     if config.control_enabled:
         server, thread = start_control_server(config, controller)

@@ -1,6 +1,6 @@
 import json
 import socket
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -100,20 +100,41 @@ def test_stop_command_is_queued() -> None:
         ("marker", {"description": "First song"}),
     ],
 )
-def test_show_control_twitch_commands_are_queued(
+def test_show_control_twitch_commands_call_twitch_api(
     command: str, payload: dict[str, object]
 ) -> None:
     state = RuntimeState()
-    controller = ControlController(state=state)
+    twitch = FakeTwitchApi()
+    controller = ControlController(state=state, twitch=twitch)
     message = {"type": "command", "id": "action-1", "command": command} | payload
 
     response = handle_message(_config(), controller, message)
 
-    queued = controller.commands.get_nowait()
-    assert response == {"type": "reply", "id": "action-1", "ok": True}
-    assert queued.name == command
-    assert queued.message_id == "action-1"
-    assert queued.payload == payload
+    assert response == {
+        "type": "reply",
+        "id": "action-1",
+        "ok": True,
+        "result": {"performed": command},
+    }
+    assert twitch.commands == [(command, payload)]
+
+
+def test_twitch_command_fails_when_twitch_api_is_not_configured() -> None:
+    state = RuntimeState()
+    controller = ControlController(state=state)
+
+    response = handle_message(
+        _config(),
+        controller,
+        {"type": "command", "id": "chat-1", "command": "chat", "message": "hello"},
+    )
+
+    assert response == {
+        "type": "reply",
+        "id": "chat-1",
+        "ok": False,
+        "error": "Twitch API is not configured",
+    }
 
 
 def test_unknown_command_fails_without_queueing() -> None:
@@ -160,3 +181,12 @@ def unused_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
+
+
+class FakeTwitchApi:
+    def __init__(self) -> None:
+        self.commands: list[tuple[str, dict[str, object]]] = []
+
+    def perform(self, command: str, payload: Mapping[str, object]) -> dict[str, object]:
+        self.commands.append((command, dict(payload)))
+        return {"performed": command}

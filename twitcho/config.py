@@ -24,6 +24,12 @@ class Twitcho(BaseModel):
     control_host: str = "127.0.0.1"
     control_port: int = 17_351
     control_token: str | None = None
+    twitch_client_id: str | None = None
+    twitch_access_token: str | None = None
+    twitch_broadcaster_id: str | None = None
+    twitch_sender_id: str | None = None
+    twitch_moderator_id: str | None = None
+    twitch_api_url: str = "https://api.twitch.tv/helix"
 
     @field_validator("channel", "sample_rate", "video_frame_rate", "control_port")
     @classmethod

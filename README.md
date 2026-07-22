@@ -15,7 +15,10 @@ Create a JSON config file:
   "channel": 17,
   "video": "visual-bed.mp4",
   "twitch_key": "live_...",
-  "title_card": "title.png"
+  "title_card": "title.png",
+  "twitch_client_id": "...",
+  "twitch_access_token": "...",
+  "twitch_broadcaster_id": "123456789"
 }
 ```
 
@@ -65,6 +68,18 @@ Then send commands:
 The control host and port can be changed with `control_host` and
 `control_port` in the JSON config. Set `control_enabled` to `false` to disable
 the control server.
+
+The Twitch API commands require `twitch_client_id`, `twitch_access_token`, and
+`twitch_broadcaster_id`. By default, Twitcho uses the broadcaster ID as the chat
+sender and announcement moderator. Set `twitch_sender_id` or
+`twitch_moderator_id` if those should be different.
+
+The token needs Twitch scopes for the side effects you use:
+
+- `channel:manage:broadcast` for stream info updates and stream markers.
+- `user:write:chat` for chat messages.
+- `moderator:manage:announcements` for announcements.
+- `clips:edit` for clips.
 
 ## Rendering a visual bed
 

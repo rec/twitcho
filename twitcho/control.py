@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from .config import Twitcho
+from .twitch_api import TwitchApiClient, TwitchApiError
 
 
 class RuntimeState:
@@ -92,6 +93,7 @@ class ControlCommand:
 @dataclass
 class ControlController:
     state: RuntimeState
+    twitch: TwitchApiClient | None = None
     commands: queue.Queue[ControlCommand] = field(default_factory=queue.Queue)
 
     def handle_command(self, message: Mapping[str, object]) -> dict[str, object]:
@@ -119,7 +121,7 @@ class ControlController:
         if command == "unmute":
             self.state.set_muted(False)
             return {"type": "reply", "id": message_id, "ok": True}
-        if command in QUEUED_COMMANDS:
+        if command == "stop":
             self.commands.put(
                 ControlCommand(
                     name=command,
@@ -128,12 +130,35 @@ class ControlController:
                 )
             )
             return {"type": "reply", "id": message_id, "ok": True}
+        if command in TWITCH_API_COMMANDS:
+            return self.handle_twitch_command(command, message_id, message)
         return {
             "type": "reply",
             "id": message_id,
             "ok": False,
             "error": f"unknown command {command}",
         }
+
+    def handle_twitch_command(
+        self, command: str, message_id: str | None, message: Mapping[str, object]
+    ) -> dict[str, object]:
+        if self.twitch is None:
+            return {
+                "type": "reply",
+                "id": message_id,
+                "ok": False,
+                "error": "Twitch API is not configured",
+            }
+        try:
+            result = self.twitch.perform(command, command_payload(message))
+        except TwitchApiError as error:
+            return {
+                "type": "reply",
+                "id": message_id,
+                "ok": False,
+                "error": str(error),
+            }
+        return {"type": "reply", "id": message_id, "ok": True, "result": result}
 
 
 class ControlServer(socketserver.ThreadingTCPServer):
@@ -251,4 +276,4 @@ def command_payload(message: Mapping[str, object]) -> dict[str, object]:
 
 
 CONTROL_FIELDS = {"type", "id", "command"}
-QUEUED_COMMANDS = {"stop", "update_stream_info", "chat", "announce", "clip", "marker"}
+TWITCH_API_COMMANDS = {"update_stream_info", "chat", "announce", "clip", "marker"}
