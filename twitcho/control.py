@@ -86,6 +86,7 @@ class RuntimeState:
 class ControlCommand:
     name: str
     message_id: str | None = None
+    payload: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -118,8 +119,14 @@ class ControlController:
         if command == "unmute":
             self.state.set_muted(False)
             return {"type": "reply", "id": message_id, "ok": True}
-        if command == "stop":
-            self.commands.put(ControlCommand(name="stop", message_id=message_id))
+        if command in QUEUED_COMMANDS:
+            self.commands.put(
+                ControlCommand(
+                    name=command,
+                    message_id=message_id,
+                    payload=command_payload(message),
+                )
+            )
             return {"type": "reply", "id": message_id, "ok": True}
         return {
             "type": "reply",
@@ -237,3 +244,11 @@ def handle_message(
 
 def typed_string(value: object) -> str | None:
     return value if isinstance(value, str) else None
+
+
+def command_payload(message: Mapping[str, object]) -> dict[str, object]:
+    return {k: v for k, v in message.items() if k not in CONTROL_FIELDS}
+
+
+CONTROL_FIELDS = {"type", "id", "command"}
+QUEUED_COMMANDS = {"stop", "update_stream_info", "chat", "announce", "clip", "marker"}

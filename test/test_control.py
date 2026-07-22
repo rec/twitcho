@@ -4,6 +4,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+import pytest
+
 from twitcho.config import Twitcho
 from twitcho.control import (
     ControlController,
@@ -82,6 +84,36 @@ def test_stop_command_is_queued() -> None:
     assert response == {"type": "reply", "id": "stop-1", "ok": True}
     assert command.name == "stop"
     assert command.message_id == "stop-1"
+    assert command.payload == {}
+
+
+@pytest.mark.parametrize(
+    ("command", "payload"),
+    [
+        (
+            "update_stream_info",
+            {"title": "Live at the club", "category": "Music", "tags": ["live"]},
+        ),
+        ("chat", {"message": "Starting now"}),
+        ("announce", {"message": "Recording and streaming"}),
+        ("clip", {}),
+        ("marker", {"description": "First song"}),
+    ],
+)
+def test_show_control_twitch_commands_are_queued(
+    command: str, payload: dict[str, object]
+) -> None:
+    state = RuntimeState()
+    controller = ControlController(state=state)
+    message = {"type": "command", "id": "action-1", "command": command} | payload
+
+    response = handle_message(_config(), controller, message)
+
+    queued = controller.commands.get_nowait()
+    assert response == {"type": "reply", "id": "action-1", "ok": True}
+    assert queued.name == command
+    assert queued.message_id == "action-1"
+    assert queued.payload == payload
 
 
 def test_unknown_command_fails_without_queueing() -> None:

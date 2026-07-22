@@ -55,6 +55,11 @@ Then send commands:
 {"type": "command", "id": "3", "command": "unmute"}
 {"type": "command", "id": "4", "command": "stop"}
 {"type": "command", "id": "5", "command": "ping"}
+{"type": "command", "id": "6", "command": "update_stream_info", "title": "Live at the club", "category": "Music", "tags": ["live"]}
+{"type": "command", "id": "7", "command": "chat", "message": "Starting now"}
+{"type": "command", "id": "8", "command": "announce", "message": "Recording and streaming"}
+{"type": "command", "id": "9", "command": "clip"}
+{"type": "command", "id": "10", "command": "marker", "description": "First song"}
 ```
 
 The control host and port can be changed with `control_host` and
