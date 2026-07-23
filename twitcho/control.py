@@ -23,6 +23,7 @@ class RuntimeState:
         self.left_level_db: float | None = None
         self.right_level_db: float | None = None
         self.clipping = False
+        self.output_bitrate_kbps: float | None = None
         self.last_error: str | None = None
 
     def snapshot(self) -> dict[str, object]:
@@ -38,6 +39,7 @@ class RuntimeState:
                 "left_level_db": self.left_level_db,
                 "right_level_db": self.right_level_db,
                 "clipping": self.clipping,
+                "output_bitrate_kbps": self.output_bitrate_kbps,
                 "last_error": self.last_error,
             }
 
@@ -81,6 +83,10 @@ class RuntimeState:
             self.left_level_db = left_level_db
             self.right_level_db = right_level_db
             self.clipping = clipping
+
+    def set_output_bitrate(self, bitrate_kbps: float | None) -> None:
+        with self._lock:
+            self.output_bitrate_kbps = bitrate_kbps
 
 
 @dataclass

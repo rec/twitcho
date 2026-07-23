@@ -43,6 +43,7 @@ def test_status_command_returns_runtime_snapshot() -> None:
     state = RuntimeState()
     state.set_state("streaming")
     state.set_ffmpeg(alive=True)
+    state.set_output_bitrate(312.5)
     controller = ControlController(state=state)
 
     response = handle_message(
@@ -56,6 +57,7 @@ def test_status_command_returns_runtime_snapshot() -> None:
     assert response["ok"] is True
     assert response["status"]["state"] == "streaming"
     assert response["status"]["ffmpeg_alive"] is True
+    assert response["status"]["output_bitrate_kbps"] == 312.5
 
 
 def test_mute_and_unmute_commands_change_runtime_state() -> None:

@@ -27,13 +27,18 @@ def _config() -> Twitcho:
 def test_ffmpeg_command_streams_audio_pipe_and_video_loop() -> None:
     command = ffmpeg_command(_config())
 
-    assert command[:10] == [
+    assert command[:9] == [
         "ffmpeg",
         "-hide_banner",
         "-loglevel",
         "warning",
+        "-nostats",
+        "-progress",
+        "pipe:2",
         "-f",
         "f32le",
+    ]
+    assert command[9:13] == [
         "-ar",
         "48000",
         "-ac",

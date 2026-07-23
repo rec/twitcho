@@ -30,7 +30,7 @@ def stream(config: Twitcho) -> None:
         stdout=sp.DEVNULL,
         stderr=sp.PIPE,
     )
-    ffmpeg_output = capture_process_stderr(process)
+    ffmpeg_output = capture_process_stderr(process, state)
     try:
         state.set_ffmpeg(alive=True)
         state.set_state("streaming")
@@ -87,6 +87,9 @@ def ffmpeg_command(config: Twitcho) -> list[str]:
         "-hide_banner",
         "-loglevel",
         "warning",
+        "-nostats",
+        "-progress",
+        "pipe:2",
         "-f",
         "f32le",
         "-ar",

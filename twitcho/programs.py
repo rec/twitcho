@@ -4,6 +4,8 @@ import threading
 from collections import deque
 from collections.abc import Sequence
 
+from .control import RuntimeState
+
 
 class OutputTail:
     def __init__(self, line_count: int = 80) -> None:
@@ -33,12 +35,14 @@ def run_silent(command: Sequence[str], *, text: bool = False) -> sp.CompletedPro
         raise
 
 
-def capture_process_stderr(process: sp.Popen[bytes]) -> OutputTail:
+def capture_process_stderr(
+    process: sp.Popen[bytes], state: RuntimeState | None = None
+) -> OutputTail:
     tail = OutputTail()
     if process.stderr is not None:
         thread = threading.Thread(
             target=read_stderr,
-            args=(process, tail),
+            args=(process, tail, state),
             name="TwitchoProcessOutput",
             daemon=True,
         )
@@ -46,10 +50,33 @@ def capture_process_stderr(process: sp.Popen[bytes]) -> OutputTail:
     return tail
 
 
-def read_stderr(process: sp.Popen[bytes], tail: OutputTail) -> None:
+def read_stderr(
+    process: sp.Popen[bytes], tail: OutputTail, state: RuntimeState | None = None
+) -> None:
     assert process.stderr is not None
     for line in process.stderr:
-        tail.append(line.decode(errors="replace"))
+        text = line.decode(errors="replace")
+        tail.append(text)
+        if state is not None:
+            update_bitrate(state, text)
+
+
+def update_bitrate(state: RuntimeState, line: str) -> None:
+    if not line.startswith("bitrate="):
+        return
+    state.set_output_bitrate(parse_bitrate(line.removeprefix("bitrate=").strip()))
+
+
+def parse_bitrate(value: str) -> float | None:
+    if value == "N/A":
+        return None
+    if value.endswith("Mbits/s"):
+        return float(value.removesuffix("Mbits/s").strip()) * 1000
+    if value.endswith("kbits/s"):
+        return float(value.removesuffix("kbits/s").strip())
+    if value.endswith("bits/s"):
+        return float(value.removesuffix("bits/s").strip()) / 1000
+    return None
 
 
 def report_failed_process(command: Sequence[str], tail: OutputTail) -> None:
