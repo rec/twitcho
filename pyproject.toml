@@ -8,6 +8,7 @@ dependencies = [
     "numpy",
     "pillow>=12.3.0",
     "pydantic>=2",
+    "reccy",
     "sounddevice",
     "tyro",
 ]
@@ -27,6 +28,9 @@ dev = [
 
 [tool.uv]
 exclude-newer = "1 week"
+
+[tool.uv.sources]
+reccy = { path = "../reccy", editable = true }
 
 [tool.ruff]
 line-length = 88
