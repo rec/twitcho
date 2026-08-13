@@ -5,8 +5,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+from reccy.process import run_silent
+
 from scripts import loop_videos
-from twitcho.programs import run_silent
 
 
 def main() -> None:

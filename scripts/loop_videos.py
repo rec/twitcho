@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from twitcho.programs import run_silent
+from reccy.process import run_silent
 
 
 def main() -> None:

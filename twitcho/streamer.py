@@ -1,9 +1,10 @@
-import subprocess as sp
+import subprocess
 import time
-import typing as t
+from collections.abc import Callable
 
 import numpy as np
 import sounddevice
+from reccy import logging, process
 
 from .config import Twitcho
 from .control import (
@@ -12,8 +13,10 @@ from .control import (
     start_control_server,
     stop_control_server,
 )
-from .programs import capture_process_stderr, report_failed_process
+from .programs import update_bitrate
 from .twitch_api import TwitchApi
+
+LOGGER = logging.get_logger(__name__)
 
 
 def stream(config: Twitcho) -> None:
@@ -24,48 +27,52 @@ def stream(config: Twitcho) -> None:
         server = start_control_server(config, controller)
 
     requested_stop = False
-    process = sp.Popen(
+    ffmpeg = subprocess.Popen(
         ffmpeg_command(config),
-        stdin=sp.PIPE,
-        stdout=sp.DEVNULL,
-        stderr=sp.PIPE,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
-    ffmpeg_output = capture_process_stderr(process, state)
+    ffmpeg_output = process.capture_stderr(
+        ffmpeg,
+        lambda line: update_bitrate(state, line),
+        thread_name="TwitchoProcessOutput",
+    )
     try:
         state.set_ffmpeg(alive=True)
         state.set_state("streaming")
         if server is not None:
             server.publish("status", status=state.snapshot())
         with sounddevice.InputStream(
-            callback=_audio_callback(config, process, state),
+            callback=_audio_callback(config, ffmpeg, state),
             channels=config.required_channels,
             device=config.device_name,
             dtype="float32",
             samplerate=config.sample_rate,
         ):
-            while process.poll() is None:
+            while ffmpeg.poll() is None:
                 if should_stop(controller):
                     requested_stop = True
                     state.set_state("stopping")
-                    process.terminate()
+                    process.terminate(ffmpeg)
                     break
                 time.sleep(0.05)
-            returncode = process.wait()
+            returncode = ffmpeg.wait()
             state.set_ffmpeg(alive=False, returncode=returncode)
             if returncode and not requested_stop:
-                report_failed_process(ffmpeg_command(config), ffmpeg_output)
+                process.report_failed_process(
+                    ffmpeg_command(config), ffmpeg_output, logger=LOGGER
+                )
     except KeyboardInterrupt:
         state.set_state("stopping")
-        process.terminate()
+        process.terminate(ffmpeg)
     except BrokenPipeError:
         state.set_error("ffmpeg input pipe closed")
     finally:
-        if process.stdin is not None:
-            process.stdin.close()
-        if process.poll() is None:
-            process.terminate()
-            process.wait()
-        state.set_ffmpeg(alive=False, returncode=process.returncode)
+        if ffmpeg.stdin is not None:
+            ffmpeg.stdin.close()
+        process.terminate(ffmpeg)
+        state.set_ffmpeg(alive=False, returncode=ffmpeg.returncode)
         if state.snapshot()["state"] != "failed":
             state.set_state("stopped")
         if server is not None:
@@ -209,8 +216,8 @@ def select_stereo_pair(config: Twitcho, data: np.ndarray) -> np.ndarray:
 
 
 def _audio_callback(
-    config: Twitcho, process: sp.Popen[bytes], state: RuntimeState
-) -> t.Callable[[np.ndarray, int, object, object], None]:
+    config: Twitcho, process: subprocess.Popen[bytes], state: RuntimeState
+) -> Callable[[np.ndarray, int, object, object], None]:
     def callback(
         indata: np.ndarray,
         frames: int,

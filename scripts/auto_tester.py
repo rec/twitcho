@@ -5,9 +5,9 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from reccy.process import run_silent
 
 from scripts import loop_videos
-from twitcho.programs import run_silent
 
 FRAME_SIZE = 64
 FRAME_CHANNELS = 3

@@ -8,8 +8,7 @@ from pathlib import Path
 import tyro
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel
-
-from twitcho.programs import run_silent
+from reccy.process import run_silent
 
 BLACK = Path("__black__")
 IMAGE_SUFFIXES = {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}

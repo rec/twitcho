@@ -1,11 +1,12 @@
 import logging
-import subprocess as sp
+import subprocess
 import sys
 
 import pytest
+from reccy.process import run_silent
 
 from twitcho.control import RuntimeState
-from twitcho.programs import parse_bitrate, run_silent, update_bitrate
+from twitcho.programs import parse_bitrate, update_bitrate
 
 
 def test_run_silent_hides_successful_output(capsys: pytest.CaptureFixture[str]) -> None:
@@ -25,7 +26,7 @@ def test_run_silent_hides_successful_output(capsys: pytest.CaptureFixture[str]) 
 def test_run_silent_logs_failed_output(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.ERROR)
 
-    with pytest.raises(sp.CalledProcessError):
+    with pytest.raises(subprocess.CalledProcessError):
         run_silent(
             [
                 sys.executable,
