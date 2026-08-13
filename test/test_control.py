@@ -47,7 +47,12 @@ def test_control_endpoints_default_to_local_paths() -> None:
         channel=2,
         video=Path("visual-bed.mp4"),
         twitch_key="key",
+        home=Path("/tmp/twitcho-home"),
     )
 
-    assert config.control_endpoint.name == "control.sock"
-    assert config.event_endpoint.name == "events.sock"
+    assert config.control_endpoint == Path(
+        "/tmp/twitcho-home/.local/state/twitcho/control.sock"
+    )
+    assert config.event_endpoint == Path(
+        "/tmp/twitcho-home/.local/state/twitcho/events.sock"
+    )

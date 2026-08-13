@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from reccy.reccy import Reccy
 
 from twitcho.config import Twitcho
 
@@ -26,6 +27,7 @@ def test_twitcho_requires_stereo_pair_start_channel() -> None:
 
     assert config.required_channels == 18
     assert config.rtmp_url == "rtmp://live.twitch.tv/app/key"
+    assert isinstance(config, Reccy)
 
 
 def test_title_card_must_exist() -> None:

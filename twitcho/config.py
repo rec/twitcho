@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import field_validator, model_validator
+from reccy.reccy import Reccy
 from typing_extensions import Self
 
 
-class Twitcho(BaseModel):
+class Twitcho(Reccy, frozen=True):
     device_name: str
     channel: int
     video: Path
@@ -21,12 +22,6 @@ class Twitcho(BaseModel):
     title_duration: float = 8.0
     title_fade: float = 2.0
     control_enabled: bool = True
-    control_endpoint: Path = Field(
-        default_factory=lambda: Path.home() / ".local/state/twitcho/control.sock"
-    )
-    event_endpoint: Path = Field(
-        default_factory=lambda: Path.home() / ".local/state/twitcho/events.sock"
-    )
     twitch_client_id: str | None = None
     twitch_access_token: str | None = None
     twitch_broadcaster_id: str | None = None
