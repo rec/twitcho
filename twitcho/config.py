@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing_extensions import Self
 
 
@@ -21,9 +21,12 @@ class Twitcho(BaseModel):
     title_duration: float = 8.0
     title_fade: float = 2.0
     control_enabled: bool = True
-    control_host: str = "127.0.0.1"
-    control_port: int = 17_351
-    control_token: str | None = None
+    control_endpoint: Path = Field(
+        default_factory=lambda: Path.home() / ".local/state/twitcho/control.sock"
+    )
+    event_endpoint: Path = Field(
+        default_factory=lambda: Path.home() / ".local/state/twitcho/events.sock"
+    )
     twitch_client_id: str | None = None
     twitch_access_token: str | None = None
     twitch_broadcaster_id: str | None = None
@@ -31,7 +34,7 @@ class Twitcho(BaseModel):
     twitch_moderator_id: str | None = None
     twitch_api_url: str = "https://api.twitch.tv/helix"
 
-    @field_validator("channel", "sample_rate", "video_frame_rate", "control_port")
+    @field_validator("channel", "sample_rate", "video_frame_rate")
     @classmethod
     def validate_positive(cls, value: int) -> int:
         if value <= 0:

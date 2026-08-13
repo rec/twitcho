@@ -19,9 +19,9 @@ from .twitch_api import TwitchApi
 def stream(config: Twitcho) -> None:
     state = RuntimeState()
     controller = ControlController(state=state, twitch=TwitchApi.from_config(config))
-    server = thread = None
+    server = None
     if config.control_enabled:
-        server, thread = start_control_server(config, controller)
+        server = start_control_server(config, controller)
 
     requested_stop = False
     process = sp.Popen(
@@ -35,7 +35,7 @@ def stream(config: Twitcho) -> None:
         state.set_ffmpeg(alive=True)
         state.set_state("streaming")
         if server is not None:
-            server.broadcast({"type": "status", "status": state.snapshot()})
+            server.publish("status", status=state.snapshot())
         with sounddevice.InputStream(
             callback=_audio_callback(config, process, state),
             channels=config.required_channels,
@@ -69,8 +69,8 @@ def stream(config: Twitcho) -> None:
         if state.snapshot()["state"] != "failed":
             state.set_state("stopped")
         if server is not None:
-            server.broadcast({"type": "status", "status": state.snapshot()})
-        stop_control_server(server, thread)
+            server.publish("status", status=state.snapshot())
+        stop_control_server(server)
 
 
 def should_stop(controller: ControlController) -> bool:

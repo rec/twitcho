@@ -1,10 +1,10 @@
-import json
 import queue
-import socketserver
 import threading
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+
+from reccy import rpc
 
 from .config import Twitcho
 from .twitch_api import TwitchApiClient, TwitchApiError
@@ -167,110 +167,34 @@ class ControlController:
         return {"type": "reply", "id": message_id, "ok": True, "result": result}
 
 
-class ControlServer(socketserver.ThreadingTCPServer):
-    allow_reuse_address = True
-    daemon_threads = True
-
-    def __init__(self, config: Twitcho, controller: ControlController) -> None:
-        self.config = config
-        self.controller = controller
-        self.clients: set[ControlHandler] = set()
-        self.clients_lock = threading.Lock()
-        super().__init__((config.control_host, config.control_port), ControlHandler)
-
-    def add_client(self, client: "ControlHandler") -> None:
-        with self.clients_lock:
-            self.clients.add(client)
-
-    def remove_client(self, client: "ControlHandler") -> None:
-        with self.clients_lock:
-            self.clients.discard(client)
-
-    def broadcast(self, message: Mapping[str, object]) -> None:
-        with self.clients_lock:
-            clients = list(self.clients)
-        for client in clients:
-            client.write_message(message)
+def start_control_server(config: Twitcho, controller: ControlController) -> rpc.Server:
+    server = rpc.Server(
+        config.control_endpoint,
+        config.event_endpoint,
+        lambda request: handle_request(controller, request),
+        role="twitcho",
+    )
+    server.start()
+    return server
 
 
-class ControlHandler(socketserver.StreamRequestHandler):
-    server: ControlServer
-
-    def setup(self) -> None:
-        super().setup()
-        self._write_lock = threading.Lock()
-        self.server.add_client(self)
-
-    def finish(self) -> None:
-        self.server.remove_client(self)
-        super().finish()
-
-    def handle(self) -> None:
-        while line := self.rfile.readline():
-            self.handle_line(line)
-
-    def handle_line(self, line: bytes) -> None:
-        try:
-            message = json.loads(line)
-        except json.JSONDecodeError as error:
-            self.write_message(
-                {"type": "error", "message": f"invalid JSON: {error.msg}"}
-            )
-            return
-        if not isinstance(message, dict):
-            self.write_message(
-                {"type": "error", "message": "message must be an object"}
-            )
-            return
-        self.write_message(
-            handle_message(self.server.config, self.server.controller, message)
-        )
-
-    def write_message(self, message: Mapping[str, object]) -> None:
-        data = (json.dumps(message, separators=(",", ":")) + "\n").encode()
-        with self._write_lock:
-            try:
-                self.wfile.write(data)
-                self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError, OSError):
-                self.server.remove_client(self)
-
-
-def start_control_server(
-    config: Twitcho, controller: ControlController
-) -> tuple[ControlServer, threading.Thread]:
-    server = ControlServer(config, controller)
-    thread = threading.Thread(target=server.serve_forever, name="TwitchoControl")
-    thread.start()
-    return server, thread
-
-
-def stop_control_server(
-    server: ControlServer | None, thread: threading.Thread | None
-) -> None:
-    if server is None or thread is None:
+def stop_control_server(server: rpc.Server | None) -> None:
+    if server is None:
         return
-    server.shutdown()
-    server.server_close()
-    thread.join(timeout=2)
+    server.close()
 
 
-def handle_message(
-    config: Twitcho,
-    controller: ControlController,
-    message: Mapping[str, object],
-) -> dict[str, object]:
-    message_type = message.get("type")
-    if message_type == "hello":
-        if (
-            config.control_token is not None
-            and message.get("token") != config.control_token
-        ):
-            return {"type": "error", "message": "invalid control token"}
-        return {"type": "hello", "version": 1, "server": "twitcho"}
-    if message_type == "command":
-        return controller.handle_command(message)
-    return {"type": "error", "message": f"unknown message type {message_type}"}
+def handle_request(controller: ControlController, request: rpc.Request) -> rpc.Response:
+    message = {"command": request.command, "id": request.id} | request.params
+    response = controller.handle_command(message)
+    return rpc.Response(
+        id=request.id,
+        ok=bool(response.get("ok")),
+        result={
+            k: v for k, v in response.items() if k not in {"type", "id", "ok", "error"}
+        },
+        message=typed_string(response.get("error")),
+    )
 
 
 def typed_string(value: object) -> str | None:
