@@ -1,3 +1,4 @@
+import logging
 import subprocess as sp
 import sys
 
@@ -21,7 +22,9 @@ def test_run_silent_hides_successful_output(capsys: pytest.CaptureFixture[str]) 
     assert captured.err == ""
 
 
-def test_run_silent_shows_failed_output(capsys: pytest.CaptureFixture[str]) -> None:
+def test_run_silent_logs_failed_output(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.ERROR)
+
     with pytest.raises(sp.CalledProcessError):
         run_silent(
             [
@@ -31,12 +34,11 @@ def test_run_silent_shows_failed_output(capsys: pytest.CaptureFixture[str]) -> N
             ]
         )
 
-    captured = capsys.readouterr()
-    assert "Command failed:" in captured.err
-    assert "stdout:" in captured.err
-    assert "out" in captured.err
-    assert "stderr:" in captured.err
-    assert "err" in captured.err
+    assert "Command failed:" in caplog.text
+    assert "stdout:" in caplog.text
+    assert "out" in caplog.text
+    assert "stderr:" in caplog.text
+    assert "err" in caplog.text
 
 
 @pytest.mark.parametrize(

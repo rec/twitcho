@@ -1,10 +1,13 @@
 import subprocess as sp
-import sys
 import threading
 from collections import deque
 from collections.abc import Sequence
 
+from reccy import logging
+
 from .control import RuntimeState
+
+LOGGER = logging.get_logger(__name__)
 
 
 class OutputTail:
@@ -86,7 +89,7 @@ def report_failed_process(command: Sequence[str], tail: OutputTail) -> None:
 def report_failed_command(
     command: Sequence[str], stdout: str | bytes | None, stderr: str | bytes | None
 ) -> None:
-    print(f"Command failed: {format_command(command)}", file=sys.stderr)
+    LOGGER.error("Command failed: %s", format_command(command))
     write_output("stdout", stdout)
     write_output("stderr", stderr)
 
@@ -94,8 +97,7 @@ def report_failed_command(
 def write_output(label: str, output: str | bytes | None) -> None:
     text = decode_output(output)
     if text:
-        print(f"{label}:", file=sys.stderr)
-        print(text, file=sys.stderr)
+        LOGGER.error("%s:\n%s", label, text)
 
 
 def decode_output(output: str | bytes | None) -> str:
