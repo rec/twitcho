@@ -1,10 +1,9 @@
 import queue
 import threading
 import time
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from reccy import rpc
+from reccy import ipc, rpc
 
 from .config import Twitcho
 from .twitch_api import TwitchApiClient, TwitchApiError
@@ -92,7 +91,6 @@ class RuntimeState:
 @dataclass
 class ControlCommand:
     name: str
-    message_id: str | None = None
     payload: dict[str, object] = field(default_factory=dict)
 
 
@@ -102,76 +100,41 @@ class ControlController:
     twitch: TwitchApiClient | None = None
     commands: queue.Queue[ControlCommand] = field(default_factory=queue.Queue)
 
-    def handle_command(self, message: Mapping[str, object]) -> dict[str, object]:
-        command = message.get("command")
-        message_id = typed_string(message.get("id"))
-        if not isinstance(command, str):
-            return {
-                "type": "reply",
-                "id": message_id,
-                "ok": False,
-                "error": "missing command",
-            }
+    def handle_request(self, request: rpc.Request) -> rpc.Result:
+        command = request.command
         if command == "ping":
-            return {"type": "reply", "id": message_id, "ok": True, "reply": "pong"}
+            return "pong"
         if command == "status":
-            return {
-                "type": "reply",
-                "id": message_id,
-                "ok": True,
-                "status": self.state.snapshot(),
-            }
+            return {"status": self.state.snapshot()}
         if command == "mute":
             self.state.set_muted(True)
-            return {"type": "reply", "id": message_id, "ok": True}
+            return "ok"
         if command == "unmute":
             self.state.set_muted(False)
-            return {"type": "reply", "id": message_id, "ok": True}
+            return "ok"
         if command == "stop":
-            self.commands.put(
-                ControlCommand(
-                    name=command,
-                    message_id=message_id,
-                    payload=command_payload(message),
-                )
-            )
-            return {"type": "reply", "id": message_id, "ok": True}
+            self.commands.put(ControlCommand(name=command, payload=request.params))
+            return "ok"
         if command in TWITCH_API_COMMANDS:
-            return self.handle_twitch_command(command, message_id, message)
-        return {
-            "type": "reply",
-            "id": message_id,
-            "ok": False,
-            "error": f"unknown command {command}",
-        }
+            return self.handle_twitch_command(command, request.params)
+        return ipc.Error(type="error", message=f"unknown command {command}")
 
     def handle_twitch_command(
-        self, command: str, message_id: str | None, message: Mapping[str, object]
-    ) -> dict[str, object]:
+        self, command: str, payload: dict[str, object]
+    ) -> rpc.Result:
         if self.twitch is None:
-            return {
-                "type": "reply",
-                "id": message_id,
-                "ok": False,
-                "error": "Twitch API is not configured",
-            }
+            return ipc.Error(type="error", message="Twitch API is not configured")
         try:
-            result = self.twitch.perform(command, command_payload(message))
+            return self.twitch.perform(command, payload)
         except TwitchApiError as error:
-            return {
-                "type": "reply",
-                "id": message_id,
-                "ok": False,
-                "error": str(error),
-            }
-        return {"type": "reply", "id": message_id, "ok": True, "result": result}
+            return ipc.Error(type="error", message=str(error))
 
 
 def start_control_server(config: Twitcho, controller: ControlController) -> rpc.Server:
     server = rpc.Server(
         config.control_endpoint,
         config.event_endpoint,
-        lambda request: handle_request(controller, request),
+        controller.handle_request,
         role="twitcho",
     )
     server.start()
@@ -184,26 +147,4 @@ def stop_control_server(server: rpc.Server | None) -> None:
     server.close()
 
 
-def handle_request(controller: ControlController, request: rpc.Request) -> rpc.Response:
-    message = {"command": request.command, "id": request.id} | request.params
-    response = controller.handle_command(message)
-    return rpc.Response(
-        id=request.id,
-        ok=bool(response.get("ok")),
-        result={
-            k: v for k, v in response.items() if k not in {"type", "id", "ok", "error"}
-        },
-        message=typed_string(response.get("error")),
-    )
-
-
-def typed_string(value: object) -> str | None:
-    return value if isinstance(value, str) else None
-
-
-def command_payload(message: Mapping[str, object]) -> dict[str, object]:
-    return {k: v for k, v in message.items() if k not in CONTROL_FIELDS}
-
-
-CONTROL_FIELDS = {"type", "id", "command"}
 TWITCH_API_COMMANDS = {"update_stream_info", "chat", "announce", "clip", "marker"}

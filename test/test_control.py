@@ -1,9 +1,15 @@
+import tempfile
 from pathlib import Path
 
-from reccy import rpc
+from reccy import ipc, rpc
 
 from twitcho.config import Twitcho
-from twitcho.control import ControlController, RuntimeState, handle_request
+from twitcho.control import (
+    ControlController,
+    RuntimeState,
+    start_control_server,
+    stop_control_server,
+)
 
 
 def test_status_request_returns_runtime_snapshot() -> None:
@@ -12,13 +18,9 @@ def test_status_request_returns_runtime_snapshot() -> None:
     state.set_ffmpeg(alive=True)
     controller = ControlController(state=state)
 
-    response = handle_request(
-        controller,
-        rpc.Request(id="status-1", command="status"),
-    )
+    response = controller.handle_request(rpc.Request(command="status"))
 
-    assert response.ok
-    assert response.result["status"] == state.snapshot()
+    assert response == {"status": state.snapshot()}
 
 
 def test_mute_and_unmute_requests_change_runtime_state() -> None:
@@ -26,19 +28,48 @@ def test_mute_and_unmute_requests_change_runtime_state() -> None:
     state.set_state("streaming")
     controller = ControlController(state=state)
 
-    handle_request(controller, rpc.Request(id="mute-1", command="mute"))
+    assert controller.handle_request(rpc.Request(command="mute")) == "ok"
     assert state.snapshot()["muted"] is True
-    handle_request(controller, rpc.Request(id="unmute-1", command="unmute"))
+    assert controller.handle_request(rpc.Request(command="unmute")) == "ok"
     assert state.snapshot()["muted"] is False
 
 
 def test_stop_request_is_queued() -> None:
     controller = ControlController(state=RuntimeState())
 
-    response = handle_request(controller, rpc.Request(id="stop-1", command="stop"))
+    response = controller.handle_request(rpc.Request(command="stop"))
 
-    assert response.ok
+    assert response == "ok"
     assert controller.commands.get_nowait().name == "stop"
+
+
+def test_unknown_request_returns_rpc_error() -> None:
+    controller = ControlController(state=RuntimeState())
+
+    response = controller.handle_request(rpc.Request(command="missing"))
+
+    assert response == ipc.Error(type="error", message="unknown command missing")
+
+
+def test_control_server_returns_simplified_rpc_result() -> None:
+    with tempfile.TemporaryDirectory(prefix="twitcho-rpc-", dir="/tmp") as directory:
+        config = Twitcho(
+            device_name="X18",
+            channel=2,
+            video=Path("visual-bed.mp4"),
+            twitch_key="key",
+            home=Path(directory),
+        )
+        state = RuntimeState()
+        state.set_state("streaming")
+        controller = ControlController(state=state)
+        server = start_control_server(config, controller)
+        try:
+            response = rpc.Client(config.control_endpoint).call("status")
+        finally:
+            stop_control_server(server)
+
+        assert response == {"status": state.snapshot()}
 
 
 def test_control_endpoints_default_to_local_paths() -> None:
