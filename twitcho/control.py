@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 
 from reccy import ipc, rpc
 
-from .config import Twitcho
 from .twitch_api import TwitchApiClient, TwitchApiError
 
 
@@ -128,23 +127,6 @@ class ControlController:
             return self.twitch.perform(command, payload)
         except TwitchApiError as error:
             return ipc.Error(type="error", message=str(error))
-
-
-def start_control_server(config: Twitcho, controller: ControlController) -> rpc.Server:
-    server = rpc.Server(
-        config.control_endpoint,
-        config.event_endpoint,
-        controller.handle_request,
-        role="twitcho",
-    )
-    server.start()
-    return server
-
-
-def stop_control_server(server: rpc.Server | None) -> None:
-    if server is None:
-        return
-    server.close()
 
 
 TWITCH_API_COMMANDS = {"update_stream_info", "chat", "announce", "clip", "marker"}

@@ -21,7 +21,6 @@ class Twitcho(Reccy, frozen=True):
     title_interval: float = 180.0
     title_duration: float = 8.0
     title_fade: float = 2.0
-    control_enabled: bool = True
     twitch_client_id: str | None = None
     twitch_access_token: str | None = None
     twitch_broadcaster_id: str | None = None

@@ -1,20 +1,16 @@
-from pathlib import Path
+from __future__ import annotations
 
-import tyro
-from reccy import logging
+import sys
 
-from .config import Twitcho
-from .streamer import stream
+from . import daemon
 
 
-def run(config: Path) -> None:
-    logging.configure()
-    stream(Twitcho.model_validate_json(config.read_text()))
-
-
-def main() -> None:
-    tyro.cli(run)
+def main(argv: list[str] | None = None) -> int:
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments[:1] == ["daemon"]:
+        arguments = arguments[1:]
+    return daemon.main(arguments)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

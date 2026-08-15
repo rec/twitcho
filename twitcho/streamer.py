@@ -7,26 +7,16 @@ import sounddevice
 from reccy import logging, process
 
 from .config import Twitcho
-from .control import (
-    ControlController,
-    RuntimeState,
-    start_control_server,
-    stop_control_server,
-)
+from .control import ControlController, RuntimeState
 from .programs import update_bitrate
-from .twitch_api import TwitchApi
 
 LOGGER = logging.get_logger(__name__)
 
 
-def stream(config: Twitcho) -> None:
-    state = RuntimeState()
-    controller = ControlController(state=state, twitch=TwitchApi.from_config(config))
-    server = None
-    if config.control_enabled:
-        server = start_control_server(config, controller)
-
+def stream(config: Twitcho, controller: ControlController) -> int:
+    state = controller.state
     requested_stop = False
+    result = 1
     ffmpeg = subprocess.Popen(
         ffmpeg_command(config),
         stdin=subprocess.PIPE,
@@ -41,8 +31,6 @@ def stream(config: Twitcho) -> None:
     try:
         state.set_ffmpeg(alive=True)
         state.set_state("streaming")
-        if server is not None:
-            server.publish("status", status=state.snapshot())
         with sounddevice.InputStream(
             callback=_audio_callback(config, ffmpeg, state),
             channels=config.required_channels,
@@ -63,11 +51,14 @@ def stream(config: Twitcho) -> None:
                 process.report_failed_process(
                     ffmpeg_command(config), ffmpeg_output, logger=LOGGER
                 )
+            result = 0 if requested_stop else returncode
     except KeyboardInterrupt:
         state.set_state("stopping")
         process.terminate(ffmpeg)
+        result = 0
     except BrokenPipeError:
         state.set_error("ffmpeg input pipe closed")
+        result = 1
     finally:
         if ffmpeg.stdin is not None:
             ffmpeg.stdin.close()
@@ -75,9 +66,7 @@ def stream(config: Twitcho) -> None:
         state.set_ffmpeg(alive=False, returncode=ffmpeg.returncode)
         if state.snapshot()["state"] != "failed":
             state.set_state("stopped")
-        if server is not None:
-            server.publish("status", status=state.snapshot())
-        stop_control_server(server)
+    return result
 
 
 def should_stop(controller: ControlController) -> bool:
