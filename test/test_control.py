@@ -17,7 +17,7 @@ def test_status_request_returns_runtime_snapshot() -> None:
 
     response = controller.handle_request(rpc.Request(command="status"))
 
-    assert response == {"status": state.snapshot()}
+    assert response == state.snapshot()
 
 
 def test_mute_and_unmute_requests_change_runtime_state() -> None:

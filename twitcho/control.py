@@ -104,7 +104,7 @@ class ControlController:
         if command == "ping":
             return "pong"
         if command == "status":
-            return {"status": self.state.snapshot()}
+            return self.state.snapshot()
         if command == "mute":
             self.state.set_muted(True)
             return "ok"
