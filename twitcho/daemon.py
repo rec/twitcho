@@ -5,21 +5,14 @@ from typing import Annotated, ClassVar, Literal
 
 import tyro
 from pydantic import BaseModel, PrivateAttr
-from reccy import ipc, models, rpc, service
+from reccy import ipc, models, rpc, service, service_spec
 from reccy.reccy import Reccy, ReccyStatus
 
 from . import control, streamer
 from .config import Twitcho
 from .twitch_api import TwitchApi
 
-TWITCHO_SERVICE = models.ServiceSpec(
-    name="twitcho",
-    display_name="Twitcho",
-    description="Twitcho Twitch streamer",
-    launchd_label="com.swirly.twitcho",
-    daemon_env_var="TWITCHO_DAEMON",
-    windows_pipe=r"\\.\pipe\twitcho",
-)
+TWITCHO_SERVICE = service_spec.load(Path(__file__).with_name("service.toml"))
 
 
 class DaemonOptions(BaseModel, frozen=True):
