@@ -21,8 +21,6 @@ def test_install_creates_daemon_service_with_absolute_config_path() -> None:
     assert result == 0
     assert install_service.call_args.args == (
         [
-            "-m",
-            "twitcho",
             "daemon",
             "run",
             "--config",

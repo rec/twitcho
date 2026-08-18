@@ -25,6 +25,7 @@ class DaemonOptions(BaseModel, frozen=True):
 
 class TwitchoDaemon(Reccy, frozen=True):
     service_spec: ClassVar[models.ServiceSpec] = TWITCHO_SERVICE
+    daemon_module: ClassVar[str] = "twitcho"
     status_model: ClassVar[type[ReccyStatus]] = ReccyStatus
     rpc_enabled: ClassVar[bool] = True
     rpc_role: ClassVar[str] = "twitcho"
@@ -70,8 +71,6 @@ def run(options: DaemonOptions) -> int:
     if options.action == "install":
         result = daemon.install_service(
             [
-                "-m",
-                "twitcho",
                 "daemon",
                 "run",
                 "--config",
