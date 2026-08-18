@@ -4,13 +4,11 @@ from collections.abc import Callable
 
 import numpy as np
 import sounddevice
-from reccy import logging, process
+from reccy import process
 
 from .config import Twitcho
 from .control import ControlController, RuntimeState
 from .programs import update_bitrate
-
-LOGGER = logging.get_logger(__name__)
 
 
 def stream(config: Twitcho, controller: ControlController) -> int:
@@ -48,9 +46,7 @@ def stream(config: Twitcho, controller: ControlController) -> int:
             returncode = ffmpeg.wait()
             state.set_ffmpeg(alive=False, returncode=returncode)
             if returncode and not requested_stop:
-                process.report_failed_process(
-                    ffmpeg_command(config), ffmpeg_output, logger=LOGGER
-                )
+                process.report_failed_process(ffmpeg_command(config), ffmpeg_output)
             result = 0 if requested_stop else returncode
     except KeyboardInterrupt:
         state.set_state("stopping")
