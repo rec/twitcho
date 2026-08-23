@@ -2,11 +2,11 @@ from pathlib import Path
 
 from reccy import ipc, rpc
 
+from twitcho.config import Twitcho
 from twitcho.control import (
     ControlController,
     RuntimeState,
 )
-from twitcho.daemon import TwitchoDaemon
 
 
 def test_status_request_returns_runtime_snapshot() -> None:
@@ -49,8 +49,8 @@ def test_unknown_request_returns_rpc_error() -> None:
 
 
 def test_daemon_uses_standard_reccy_control_path() -> None:
-    daemon = TwitchoDaemon(home=Path("/tmp/twitcho-home"))
+    twitcho = Twitcho.model_construct(home=Path("/tmp/twitcho-home"))
 
-    assert daemon.control_endpoint == Path(
+    assert twitcho.control_endpoint == Path(
         "/tmp/twitcho-home/.local/state/twitcho/gui.sock"
     )

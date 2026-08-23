@@ -1,11 +1,25 @@
 from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar
 
-from pydantic import field_validator, model_validator
-from reccy.reccy import Reccy
+from pydantic import PrivateAttr, field_validator, model_validator
+from reccy import ipc, models, rpc, service_spec
+from reccy.reccy import Reccy, ReccyStatus
 from typing_extensions import Self
+
+TWITCHO_SERVICE = service_spec.load(Path(__file__).with_name("service.toml"))
+
+if TYPE_CHECKING:
+    from .control import ControlController
 
 
 class Twitcho(Reccy, frozen=True):
+    service_spec: ClassVar[models.ServiceSpec] = TWITCHO_SERVICE
+    daemon_module: ClassVar[str] = "twitcho"
+    status_model: ClassVar[type[ReccyStatus]] = ReccyStatus
+    rpc_enabled: ClassVar[bool] = True
+    rpc_role: ClassVar[str] = "twitcho"
+    logger_name: ClassVar[str] = "twitcho"
+
     device_name: str
     channel: int
     video: Path
@@ -27,6 +41,31 @@ class Twitcho(Reccy, frozen=True):
     twitch_sender_id: str | None = None
     twitch_moderator_id: str | None = None
     twitch_api_url: str = "https://api.twitch.tv/helix"
+
+    _controller: "ControlController | None" = PrivateAttr(default=None)
+
+    def run(self) -> int:
+        from . import control, streamer
+        from .twitch_api import TwitchApi
+
+        controller = control.ControlController(
+            state=control.RuntimeState(),
+            twitch=TwitchApi.from_config(self),
+        )
+        object.__setattr__(self, "_controller", controller)
+        self.start()
+        try:
+            returncode = streamer.stream(self, controller)
+            if returncode:
+                self.publish_error(f"ffmpeg exited with {returncode}")
+            return returncode
+        finally:
+            self.close()
+
+    def rpc_response(self, request: rpc.Request) -> rpc.Result:
+        if self._controller is None:
+            return ipc.Error(type="error", message="Twitcho is not running")
+        return self._controller.handle_request(request)
 
     @field_validator("channel", "sample_rate", "video_frame_rate")
     @classmethod

@@ -4,13 +4,14 @@ from unittest import mock
 from reccy.models import StatusResult
 
 from twitcho import daemon
+from twitcho.config import Twitcho
 
 
 def test_install_creates_daemon_service_with_absolute_config_path() -> None:
     config = Path("private/config.json")
     with (
         mock.patch.object(
-            daemon.TwitchoDaemon,
+            Twitcho,
             "install_service",
             return_value=StatusResult(installed=True, running=True),
         ) as install_service,
