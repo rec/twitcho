@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import twitcho.streamer
 from twitcho.config import Twitcho
 from twitcho.control import RuntimeState
 from twitcho.streamer import (
@@ -65,6 +66,37 @@ def test_ffmpeg_command_overlays_title_card(tmp_path: Path) -> None:
     assert "fade=t=in:st=0:d=2.000000:alpha=1" in graph
     assert "fade=t=out:st=6.000000:d=2.000000:alpha=1" in graph
     assert "loop=loop=-1:size=1800:start=0" in graph
+
+
+def test_ffmpeg_command_randomly_overlays_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
+    image = image_dir / "participant.png"
+    image.touch()
+    config = _config().model_copy(
+        update={
+            "image_dir": image_dir,
+            "image_interval": 60,
+            "image_duration": 10,
+            "image_fade": 3,
+            "image_chance": 1,
+            "video_frame_rate": 24,
+            "video_resolution": "1280x720",
+        }
+    )
+    monkeypatch.setattr(twitcho.streamer.random, "random", lambda: 0.0)
+    monkeypatch.setattr(twitcho.streamer.random, "choice", lambda paths: paths[0])
+
+    command = ffmpeg_command(config)
+    graph = command[command.index("-filter_complex") + 1]
+
+    assert image.as_posix() in command
+    assert "color=c=black@0.0:s=1280x720:r=24:d=50.000000" in command
+    assert "[base][image_loop]overlay=(W-w)/2:(H-h)/2" in graph
+    assert "fade=t=out:st=7.000000:d=3.000000:alpha=1" in graph
+    assert "loop=loop=-1:size=1440:start=0" in graph
 
 
 def test_video_size_parses_resolution() -> None:

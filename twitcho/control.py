@@ -1,7 +1,12 @@
 import queue
+import shutil
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
+from urllib.error import URLError
+from urllib.parse import unquote, urlparse
+from urllib.request import url2pathname, urlopen
 
 from reccy import ipc, rpc
 
@@ -96,6 +101,7 @@ class ControlCommand:
 @dataclass
 class ControlController:
     state: RuntimeState
+    image_dir: Path = Path("images")
     twitch: TwitchApiClient | None = None
     commands: queue.Queue[ControlCommand] = field(default_factory=queue.Queue)
 
@@ -114,9 +120,26 @@ class ControlController:
         if command == "stop":
             self.commands.put(ControlCommand(name=command, payload=request.params))
             return "ok"
+        if command == "image":
+            return self.handle_image_command(request.params)
         if command in TWITCH_API_COMMANDS:
             return self.handle_twitch_command(command, request.params)
         return ipc.Error(type="error", message=f"unknown command {command}")
+
+    def handle_image_command(self, payload: dict[str, object]) -> rpc.Result:
+        urls = payload.get("urls")
+        if not isinstance(urls, list) or not urls:
+            return ipc.Error(type="error", message="image requires one or more urls")
+        validated_urls: list[str] = []
+        for url in urls:
+            if not isinstance(url, str):
+                return ipc.Error(type="error", message="image urls must be strings")
+            validated_urls.append(url)
+        try:
+            paths = store_images(self.image_dir, validated_urls)
+        except ImageStoreError as error:
+            return ipc.Error(type="error", message=str(error))
+        return {"images": [p.as_posix() for p in paths]}
 
     def handle_twitch_command(
         self, command: str, payload: dict[str, object]
@@ -130,3 +153,54 @@ class ControlController:
 
 
 TWITCH_API_COMMANDS = {"update_stream_info", "chat", "announce", "clip", "marker"}
+
+
+class ImageStoreError(ValueError):
+    pass
+
+
+def store_images(image_dir: Path, urls: list[str]) -> list[Path]:
+    image_dir.mkdir(parents=True, exist_ok=True)
+    return [store_image(image_dir, u) for u in urls]
+
+
+def store_image(image_dir: Path, url: str) -> Path:
+    parsed = urlparse(url)
+    if parsed.scheme == "file":
+        source = Path(url2pathname(parsed.path))
+        target = unique_image_path(image_dir, image_name(parsed.path))
+        try:
+            shutil.copyfile(source, target)
+        except OSError as error:
+            raise ImageStoreError(f"could not copy {url}: {error}") from error
+        return target
+    if parsed.scheme in {"http", "https"}:
+        target = unique_image_path(image_dir, image_name(parsed.path))
+        try:
+            with urlopen(url, timeout=10) as response:
+                target.write_bytes(response.read())
+        except (OSError, URLError) as error:
+            raise ImageStoreError(f"could not download {url}: {error}") from error
+        return target
+    raise ImageStoreError(f"unsupported image URL {url}")
+
+
+def image_name(path: str) -> str:
+    name = Path(unquote(path)).name
+    if name in {"", ".", ".."}:
+        name = "image.png"
+    if Path(name).suffix:
+        return name
+    return f"{name}.png"
+
+
+def unique_image_path(image_dir: Path, name: str) -> Path:
+    target = image_dir / name
+    if not target.exists():
+        return target
+    suffix = target.suffix or ".png"
+    stem = target.stem if target.suffix else target.name
+    index = 2
+    while (candidate := image_dir / f"{stem}-{index}{suffix}").exists():
+        index += 1
+    return candidate

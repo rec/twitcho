@@ -1,6 +1,9 @@
+import random
 import subprocess
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import sounddevice
@@ -9,6 +12,17 @@ from reccy import process
 from .config import Twitcho
 from .control import ControlController, RuntimeState
 from .programs import update_bitrate
+
+
+@dataclass(frozen=True)
+class VideoOverlay:
+    name: str
+    image: Path
+    input_index: int
+    gap_index: int
+    interval: float
+    duration: float
+    fade: float
 
 
 def stream(config: Twitcho, controller: ControlController) -> int:
@@ -74,6 +88,8 @@ def should_stop(controller: ControlController) -> bool:
 
 
 def ffmpeg_command(config: Twitcho) -> list[str]:
+    overlays: list[VideoOverlay] = []
+    next_input = 2
     command = [
         "ffmpeg",
         "-hide_banner",
@@ -97,8 +113,36 @@ def ffmpeg_command(config: Twitcho) -> list[str]:
         config.video.as_posix(),
     ]
     if config.title_card is not None:
-        command.extend(title_input_args(config))
-        command.extend(["-filter_complex", title_filter(config), "-map", "[video]"])
+        overlays.append(
+            VideoOverlay(
+                name="title",
+                image=config.title_card,
+                input_index=next_input,
+                gap_index=next_input + 1,
+                interval=config.title_interval,
+                duration=config.title_duration,
+                fade=config.title_fade,
+            )
+        )
+        command.extend(overlay_input_args(config, overlays[-1]))
+        next_input += 2
+    if (image := random_image(config)) is not None:
+        overlays.append(
+            VideoOverlay(
+                name="image",
+                image=image,
+                input_index=next_input,
+                gap_index=next_input + 1,
+                interval=config.image_interval,
+                duration=config.image_duration,
+                fade=config.image_fade,
+            )
+        )
+        command.extend(overlay_input_args(config, overlays[-1]))
+    if overlays:
+        command.extend(
+            ["-filter_complex", overlay_filter(config, overlays), "-map", "[video]"]
+        )
     else:
         command.extend(["-map", "1:v:0"])
     command.extend(
@@ -137,15 +181,30 @@ def ffmpeg_command(config: Twitcho) -> list[str]:
 
 def title_input_args(config: Twitcho) -> list[str]:
     assert config.title_card is not None
-    gap_duration = config.title_interval - config.title_duration
+    return overlay_input_args(
+        config,
+        VideoOverlay(
+            name="title",
+            image=config.title_card,
+            input_index=2,
+            gap_index=3,
+            interval=config.title_interval,
+            duration=config.title_duration,
+            fade=config.title_fade,
+        ),
+    )
+
+
+def overlay_input_args(config: Twitcho, overlay: VideoOverlay) -> list[str]:
+    gap_duration = overlay.interval - overlay.duration
     width, height = video_size(config)
     return [
         "-loop",
         "1",
         "-t",
-        f"{config.title_duration:.6f}",
+        f"{overlay.duration:.6f}",
         "-i",
-        config.title_card.as_posix(),
+        overlay.image.as_posix(),
         "-f",
         "lavfi",
         "-t",
@@ -160,27 +219,81 @@ def title_input_args(config: Twitcho) -> list[str]:
 
 
 def title_filter(config: Twitcho) -> str:
+    assert config.title_card is not None
+    return overlay_filter(
+        config,
+        [
+            VideoOverlay(
+                name="title",
+                image=config.title_card,
+                input_index=2,
+                gap_index=3,
+                interval=config.title_interval,
+                duration=config.title_duration,
+                fade=config.title_fade,
+            )
+        ],
+    )
+
+
+def overlay_filter(config: Twitcho, overlays: list[VideoOverlay]) -> str:
     width, height = video_size(config)
-    fade_out_start = max(0.0, config.title_duration - config.title_fade)
-    loop_frames = max(1, round(config.title_interval * config.video_frame_rate))
-    return (
+    parts = [
         "[1:v]"
         f"scale={width}:{height},fps={config.video_frame_rate},"
         "format=yuv420p[base];"
-        "[2:v]"
+    ]
+    current = "base"
+    for index, overlay in enumerate(overlays):
+        output = "video" if index == len(overlays) - 1 else f"base{index + 1}"
+        parts.append(overlay_video_filter(config, overlay))
+        parts.append(
+            f"[{current}][{overlay.name}_loop]"
+            f"overlay=(W-w)/2:(H-h)/2:eof_action=repeat[{output}]"
+        )
+        current = output
+    return "".join(parts)
+
+
+def overlay_video_filter(config: Twitcho, overlay: VideoOverlay) -> str:
+    width, height = video_size(config)
+    fade_out_start = max(0.0, overlay.duration - overlay.fade)
+    loop_frames = max(1, round(overlay.interval * config.video_frame_rate))
+    return (
+        f"[{overlay.input_index}:v]"
         f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
         f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,"
         f"fps={config.video_frame_rate},format=rgba,"
-        f"trim=duration={config.title_duration:.6f},"
+        f"trim=duration={overlay.duration:.6f},"
         "setpts=PTS-STARTPTS,"
-        f"fade=t=in:st=0:d={config.title_fade:.6f}:alpha=1,"
-        f"fade=t=out:st={fade_out_start:.6f}:d={config.title_fade:.6f}:alpha=1"
-        "[title_visible];"
-        "[3:v]format=rgba,setpts=PTS-STARTPTS[title_gap];"
-        "[title_visible][title_gap]concat=n=2:v=1:a=0,"
+        f"fade=t=in:st=0:d={overlay.fade:.6f}:alpha=1,"
+        f"fade=t=out:st={fade_out_start:.6f}:d={overlay.fade:.6f}:alpha=1"
+        f"[{overlay.name}_visible];"
+        f"[{overlay.gap_index}:v]format=rgba,setpts=PTS-STARTPTS[{overlay.name}_gap];"
+        f"[{overlay.name}_visible][{overlay.name}_gap]concat=n=2:v=1:a=0,"
         f"loop=loop=-1:size={loop_frames}:start=0,"
-        "setpts=N/FRAME_RATE/TB[title_loop];"
-        "[base][title_loop]overlay=(W-w)/2:(H-h)/2:eof_action=repeat[video]"
+        f"setpts=N/FRAME_RATE/TB[{overlay.name}_loop];"
+    )
+
+
+def random_image(config: Twitcho) -> Path | None:
+    if config.image_interval <= 0 or config.image_chance <= 0:
+        return None
+    if random.random() >= config.image_chance:
+        return None
+    images = image_paths(config.image_dir)
+    if not images:
+        return None
+    return random.choice(images)
+
+
+def image_paths(image_dir: Path) -> list[Path]:
+    if not image_dir.exists():
+        return []
+    return sorted(
+        p
+        for p in image_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES
     )
 
 
@@ -230,3 +343,6 @@ def level_db(samples: np.ndarray) -> float:
     if peak <= 0:
         return -120.0
     return float(20 * np.log10(peak))
+
+
+IMAGE_SUFFIXES = {".gif", ".jpeg", ".jpg", ".png", ".webp"}

@@ -27,6 +27,7 @@ def test_twitcho_requires_stereo_pair_start_channel() -> None:
 
     assert config.required_channels == 18
     assert config.rtmp_url == "rtmp://live.twitch.tv/app/key"
+    assert config.image_dir == Path("images")
     assert isinstance(config, Reccy)
 
 
@@ -54,4 +55,27 @@ def test_title_duration_must_fit_interval(tmp_path: Path) -> None:
             title_card=title,
             title_interval=8,
             title_duration=8,
+        )
+
+
+def test_image_duration_must_fit_interval() -> None:
+    with pytest.raises(ValidationError, match="shorter than image_interval"):
+        Twitcho(
+            device_name="X18",
+            channel=1,
+            video=Path("visual-bed.mp4"),
+            twitch_key="key",
+            image_interval=8,
+            image_duration=8,
+        )
+
+
+def test_image_chance_must_be_probability() -> None:
+    with pytest.raises(ValidationError, match="between 0 and 1"):
+        Twitcho(
+            device_name="X18",
+            channel=1,
+            video=Path("visual-bed.mp4"),
+            twitch_key="key",
+            image_chance=2,
         )

@@ -35,6 +35,11 @@ class Twitcho(Reccy, frozen=True):
     title_interval: float = 180.0
     title_duration: float = 8.0
     title_fade: float = 2.0
+    image_dir: Path = Path("images")
+    image_interval: float = 0.0
+    image_duration: float = 8.0
+    image_fade: float = 2.0
+    image_chance: float = 0.25
     twitch_client_id: str | None = None
     twitch_access_token: str | None = None
     twitch_broadcaster_id: str | None = None
@@ -50,6 +55,7 @@ class Twitcho(Reccy, frozen=True):
 
         controller = control.ControlController(
             state=control.RuntimeState(),
+            image_dir=self.image_dir,
             twitch=TwitchApi.from_config(self),
         )
         object.__setattr__(self, "_controller", controller)
@@ -74,11 +80,25 @@ class Twitcho(Reccy, frozen=True):
             raise ValueError("must be positive")
         return value
 
-    @field_validator("title_interval", "title_duration", "title_fade")
+    @field_validator(
+        "title_interval",
+        "title_duration",
+        "title_fade",
+        "image_interval",
+        "image_duration",
+        "image_fade",
+    )
     @classmethod
-    def validate_nonnegative_title_time(cls, value: float) -> float:
+    def validate_nonnegative_time(cls, value: float) -> float:
         if value < 0:
             raise ValueError("must not be negative")
+        return value
+
+    @field_validator("image_chance")
+    @classmethod
+    def validate_image_chance(cls, value: float) -> float:
+        if not 0 <= value <= 1:
+            raise ValueError("must be between 0 and 1")
         return value
 
     @model_validator(mode="after")
@@ -101,6 +121,18 @@ class Twitcho(Reccy, frozen=True):
             raise ValueError("title_duration must be shorter than title_interval")
         if self.title_fade * 2 > self.title_duration:
             raise ValueError("title_fade must fit within title_duration")
+        return self
+
+    @model_validator(mode="after")
+    def validate_image_overlay(self) -> Self:
+        if self.image_interval == 0:
+            return self
+        if self.image_duration <= 0:
+            raise ValueError("image_duration must be positive")
+        if self.image_duration >= self.image_interval:
+            raise ValueError("image_duration must be shorter than image_interval")
+        if self.image_fade * 2 > self.image_duration:
+            raise ValueError("image_fade must fit within image_duration")
         return self
 
     @property
