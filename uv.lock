@@ -8,7 +8,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-07-14T09:51:41.354038Z"
+exclude-newer = "2026-08-21T09:52:21.312963Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -652,26 +652,12 @@ wheels = [
 [[package]]
 name = "reccy"
 version = "0.1.0"
-source = { editable = "../reccy" }
+source = { git = "ssh://git@github.com/rec/reccy.git?rev=446a2c4a6f0437463e4a3e6eaa39b4b5597ec106#446a2c4a6f0437463e4a3e6eaa39b4b5597ec106" }
 dependencies = [
     { name = "pydantic" },
     { name = "strenum" },
+    { name = "tomli" },
     { name = "tyro" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "strenum" },
-    { name = "tyro", specifier = ">=1.0.13" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest" },
-    { name = "pyupgrade", specifier = ">=3.21.2" },
-    { name = "ruff" },
-    { name = "ty", specifier = ">=0.0.14" },
 ]
 
 [[package]]
@@ -804,7 +790,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pydantic", specifier = ">=2" },
-    { name = "reccy", editable = "../reccy" },
+    { name = "reccy", git = "ssh://git@github.com/rec/reccy.git?rev=446a2c4a6f0437463e4a3e6eaa39b4b5597ec106" },
     { name = "sounddevice" },
     { name = "tyro" },
 ]
