@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from reccy.process import run_silent
+from reccy.runtime.process import run_silent
 
 from scripts import loop_videos
 

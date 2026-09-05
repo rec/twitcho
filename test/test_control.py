@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from reccy import ipc, rpc
+from reccy.protocol import ipc, rpc
 
 import twitcho.control
 from twitcho.config import Twitcho

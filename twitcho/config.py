@@ -2,18 +2,20 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import PrivateAttr, field_validator, model_validator
-from reccy import ipc, models, rpc, service_spec
+from reccy.protocol import ipc, rpc
 from reccy.reccy import Reccy, ReccyStatus
+from reccy.services.models import ServiceSpec
+from reccy.services.spec import load
 from typing_extensions import Self
 
-TWITCHO_SERVICE = service_spec.load(Path(__file__).with_name("service.toml"))
+TWITCHO_SERVICE = load(Path(__file__).with_name("service.toml"))
 
 if TYPE_CHECKING:
     from .control import ControlController
 
 
 class Twitcho(Reccy, frozen=True):
-    service_spec: ClassVar[models.ServiceSpec] = TWITCHO_SERVICE
+    service_spec: ClassVar[ServiceSpec] = TWITCHO_SERVICE
     daemon_module: ClassVar[str] = "twitcho"
     status_model: ClassVar[type[ReccyStatus]] = ReccyStatus
     rpc_enabled: ClassVar[bool] = True

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice
-from reccy import process
+from reccy.runtime import process
 
 from .config import Twitcho
 from .control import ControlController, RuntimeState

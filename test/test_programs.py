@@ -3,7 +3,7 @@ import subprocess
 import sys
 
 import pytest
-from reccy.process import run_silent
+from reccy.runtime.process import run_silent
 
 from twitcho.control import RuntimeState
 from twitcho.programs import parse_bitrate, update_bitrate

@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from reccy.process import run_silent
+from reccy.runtime.process import run_silent
 
 
 def main() -> None:

@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 import tyro
 from pydantic import BaseModel
-from reccy import service
+from reccy.services.controller import print_service_status
 
 from .config import TWITCHO_SERVICE, Twitcho
 
@@ -39,5 +39,5 @@ def run(options: DaemonOptions) -> int:
         )
     else:
         result = getattr(twitcho, f"{options.action}_service")()
-    service.print_service_status(TWITCHO_SERVICE.name, result)
+    print_service_status(TWITCHO_SERVICE.name, result)
     return 0 if result.running is not False else 1

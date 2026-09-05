@@ -8,7 +8,7 @@ from urllib.error import URLError
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname, urlopen
 
-from reccy import ipc, rpc
+from reccy.protocol import ipc, rpc
 
 from .twitch_api import TwitchApiClient, TwitchApiError
 

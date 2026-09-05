@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from reccy.process import run_silent
+from reccy.runtime.process import run_silent
 
 DEFAULT_MAX_BITRATE_KBPS = 1200
 DEFAULT_SOURCE_RATIO = 0.8
